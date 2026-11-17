@@ -12,8 +12,11 @@ import { PageQuery, offset, parse } from '../../lib/http.js';
 import { getOwnedAgent } from '../../lib/tenancy.js';
 import { registerJob } from '../../jobs/queue.js';
 import {
+  PROMPT_METHOD, buildConnectPrompt, connectionStatusView, expireOpenTasks, freshClaim, pingInboxAgent, promptConfig, publishConnectionState,
+} from '../../lib/agent-inbox.js';
+import {
   ConnectionSchema, DEFAULT_PERMISSIONS, PermissionsSchema, ProfileFields, adapterHttpError, agentView, ensureHealthCheckScheduled,
-  getProviderById, getProviderBySlug, healthCheckAll, newAgentSlug, prepareConnection, runHealthCheck, validateKnowledgeSources,
+  getProviderById, getProviderBySlug, healthCheckAll, newAgentSlug, prepareConnection, revokePromptConnection, runHealthCheck, validateKnowledgeSources,
 } from './service.js';
 
 const IdParam = z.object({ id: z.string().uuid() });
@@ -23,7 +26,8 @@ const CreateBody = z.object({
   description: ProfileFields.description.default(''),
   avatar: ProfileFields.avatar.optional(),
   providerSlug: z.string().min(1).max(60),
-  modelName: ProfileFields.modelName,
+  /** optional only for prompt-connect agents (default 'self-hosted') */
+  modelName: ProfileFields.modelName.optional(),
   modelVersion: ProfileFields.modelVersion.optional(),
   instructions: ProfileFields.instructions.default(''),
   role: ProfileFields.role.default(''),
@@ -115,26 +119,34 @@ export default async function routes(app: FastifyInstance) {
     const a = requirePerm(req, 'agents.create');
     const body = parse(CreateBody, req.body);
     const provider = await getProviderBySlug(body.providerSlug);
+    const modelName = body.modelName ?? (provider.adapter === 'inbox' ? (provider.defaultModels[0] ?? 'self-hosted') : null);
+    if (!modelName) throw badRequest('modelName is required');
     await validateKnowledgeSources(a.orgId, body.knowledgeSourceIds);
     const prepared = await prepareConnection(provider, body.connection);
     const agent = await db().transaction(async (tx) => {
       const [agent] = await tx.insert(schema.agents).values({
         orgId: a.orgId, ownerId: a.user.id, providerId: provider.id, slug: newAgentSlug(body.name), name: body.name,
-        description: body.description, avatar: body.avatar ?? null, modelName: body.modelName, modelVersion: body.modelVersion ?? null,
+        description: body.description, avatar: body.avatar ?? null, modelName, modelVersion: body.modelVersion ?? null,
         instructions: body.instructions, role: body.role, tools: body.tools, languages: body.languages, claimedDomains: body.claimedDomains,
         ...(body.inputFormats ? { inputFormats: body.inputFormats } : {}), ...(body.outputFormats ? { outputFormats: body.outputFormats } : {}),
         knowledgeSourceIds: body.knowledgeSourceIds, permissions: { ...DEFAULT_PERMISSIONS }, status: 'draft', currentVersion: 1,
       }).returning();
       await tx.insert(schema.agentVersions).values({
         agentId: agent!.id, version: 1, instructions: body.instructions, role: body.role,
-        config: { modelName: body.modelName, modelVersion: body.modelVersion ?? null }, changeNote: 'Initial version', source: 'manual', createdBy: a.user.id,
+        config: { modelName, modelVersion: body.modelVersion ?? null }, changeNote: 'Initial version', source: 'manual', createdBy: a.user.id,
       });
       await tx.insert(schema.agentConnections).values({ agentId: agent!.id, ...prepared.values, status: 'pending' });
       return agent!;
     });
     await audit({ action: 'agent.create', targetType: 'agent', targetId: agent.id, metadata: { provider: provider.slug, method: body.connection.method } }, req);
     const detail = await loadDetail(agent.id, a.orgId);
-    return reply.status(201).send({ ...detail, ...(prepared.webhookSecret ? { webhookSecret: prepared.webhookSecret } : {}) });
+    if (prepared.claim) await publishConnectionState(agent.id, a.orgId, 'awaiting_claim');
+    return reply.status(201).send({
+      ...detail,
+      ...(prepared.webhookSecret ? { webhookSecret: prepared.webhookSecret } : {}),
+      // connect-via-prompt: the plaintext claim code is returned only here (stored hashed)
+      ...(prepared.claim ? { connect: buildConnectPrompt(prepared.claim.claimCode, prepared.claim.expiresAt) } : {}),
+    });
   });
 
   app.get('/:id', async (req) => {
@@ -179,6 +191,7 @@ export default async function routes(app: FastifyInstance) {
     await db().update(schema.agents).set({ deletedAt: now, isPublic: false, updatedAt: now }).where(eq(schema.agents.id, id));
     await db().update(schema.agentConnections).set({ credentialEnc: null, credentialLast4: null, webhookSecretEnc: null, status: 'disconnected', updatedAt: now })
       .where(eq(schema.agentConnections.agentId, id));
+    await revokePromptConnection(id, a.orgId, { publishState: false });
     await audit({ action: 'agent.delete', targetType: 'agent', targetId: id }, req);
     return reply.status(204).send();
   });
@@ -190,6 +203,7 @@ export default async function routes(app: FastifyInstance) {
     const agent = await getOwnedAgent(id, a.orgId);
     if (agent.status === 'suspended') throw conflict('Suspended agents cannot be reconnected');
     const provider = await getProviderById(agent.providerId);
+    if (provider.adapter === 'inbox') throw unprocessable('Connect-via-prompt agents are (re)connected with POST /agents/:id/connect-prompt');
     const [existing] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, id)).limit(1);
     const prepared = await prepareConnection(provider, body, existing);
     const now = new Date();
@@ -209,6 +223,18 @@ export default async function routes(app: FastifyInstance) {
     const { id } = parse(IdParam, req.params);
     const agent = await getOwnedAgent(id, a.orgId);
     if (agent.status === 'suspended') throw conflict('Agent is suspended');
+    const provider = await getProviderById(agent.providerId);
+    if (provider.adapter === 'inbox') {
+      // Pull-model agent: send a quick ping task through its inbox and wait for the answer.
+      const r = await pingInboxAgent(id, a.orgId, 30_000);
+      const now = new Date();
+      await db().update(schema.agentConnections).set({ lastTestedAt: now, lastError: r.ok ? null : (r.error ?? 'Ping failed').slice(0, 1000), updatedAt: now })
+        .where(eq(schema.agentConnections.agentId, id));
+      await db().update(schema.agents).set({ lastHealthCheckAt: now, ...(r.ok ? { health: 'healthy', lastLatencyMs: r.latencyMs } : {}), updatedAt: now })
+        .where(eq(schema.agents.id, id));
+      await audit({ action: 'agent.test', targetType: 'agent', targetId: id, metadata: { ok: r.ok, latencyMs: r.latencyMs, method: 'prompt' } }, req);
+      return { ok: r.ok, latencyMs: r.latencyMs, ...(r.error ? { error: r.error, errorKind: 'network' } : {}), ...(r.sample !== undefined ? { sample: r.sample } : {}) };
+    }
     const r = await runHealthCheck(id, { source: 'manual' });
     await audit({ action: 'agent.test', targetType: 'agent', targetId: id, metadata: { ok: r.ok, latencyMs: r.latencyMs, errorKind: r.kind ?? null } }, req);
     return { ok: r.ok, latencyMs: r.latencyMs, ...(r.error ? { error: r.error, errorKind: r.kind ?? null } : {}), ...(r.sample !== undefined ? { sample: r.sample } : {}) };
@@ -222,8 +248,47 @@ export default async function routes(app: FastifyInstance) {
     await db().update(schema.agentConnections).set({ credentialEnc: null, credentialLast4: null, webhookSecretEnc: null, status: 'disconnected', updatedAt: now })
       .where(eq(schema.agentConnections.agentId, id));
     await db().update(schema.agents).set({ status: agent.status === 'suspended' ? 'suspended' : 'disconnected', health: 'unknown', updatedAt: now }).where(eq(schema.agents.id, id));
+    await revokePromptConnection(id, agent.orgId);
     await audit({ action: 'agent.disconnect', targetType: 'agent', targetId: id }, req);
     return loadDetail(id, a.orgId);
+  });
+
+  /**
+   * Connect via prompt: issue a new one-time claim code + prompt. Invalidates any previous code. If the agent had
+   * already claimed, this RE-KEYS it: the old agent token is revoked and the agent must claim again.
+   */
+  app.post('/:id/connect-prompt', async (req) => {
+    const a = requirePerm(req, 'agents.connect');
+    const { id } = parse(IdParam, req.params);
+    const agent = await getOwnedAgent(id, a.orgId);
+    if (agent.status === 'suspended') throw conflict('Suspended agents cannot be reconnected');
+    const provider = await getProviderById(agent.providerId);
+    if (provider.adapter !== 'inbox') throw unprocessable(`${provider.name} agents are not connected via prompt`);
+    const [existing] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, id)).limit(1);
+    const wasClaimed = !!promptConfig(existing).claimedAt;
+    const claim = freshClaim(existing ? promptConfig(existing) : null);
+    const now = new Date();
+    const values = {
+      method: PROMPT_METHOD, endpointUrl: null, credentialEnc: null, credentialLast4: null, webhookSecretEnc: null,
+      config: claim.config, status: 'pending', lastError: null, updatedAt: now,
+    };
+    if (existing) await db().update(schema.agentConnections).set(values).where(eq(schema.agentConnections.id, existing.id));
+    else await db().insert(schema.agentConnections).values({ agentId: id, ...values });
+    await expireOpenTasks(id);
+    await db().update(schema.agents).set({ health: 'unknown', status: agent.status === 'disconnected' ? 'draft' : agent.status, updatedAt: now }).where(eq(schema.agents.id, id));
+    await audit({ action: 'agent.connect_prompt', targetType: 'agent', targetId: id, metadata: { rekey: wasClaimed } }, req);
+    await publishConnectionState(id, agent.orgId, 'awaiting_claim');
+    return buildConnectPrompt(claim.claimCode, claim.expiresAt);
+  });
+
+  app.get('/:id/connection-status', async (req) => {
+    const a = requirePerm(req, 'agents.read');
+    const { id } = parse(IdParam, req.params);
+    await getOwnedAgent(id, a.orgId);
+    const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, id)).limit(1);
+    if (!conn) return { method: null, state: 'none' };
+    if (conn.method !== PROMPT_METHOD) return { method: conn.method, state: conn.status };
+    return connectionStatusView(promptConfig(conn));
   });
 
   app.get('/:id/versions', async (req) => {

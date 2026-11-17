@@ -132,6 +132,7 @@ WebSocket goes directly to the **API** host; because the cookie belongs to the w
 | `ALLOW_PRIVATE_NETWORK_URLS` | no | `false` | SSRF guard for agent endpoints/webhooks. Default `false` in production. |
 | `EVALUATOR_PROVIDER` / `EVALUATOR_API_KEY` / `EVALUATOR_MODEL` | no | `openai` / `sk-…` / `gpt-4o-mini` | Optional LLM judge for open-ended benchmark items. |
 | `RETENTION_DELAY_SECONDS` | no | `60` | Shorten the 7-day retention reassessment (demos only). |
+| `INBOX_TASK_TIMEOUT_MS` | no | `120000` | How long StringMind waits for a "Connect via prompt" agent to answer a task (it polls; default 120 s). |
 | `PGLITE_DIR` | no | `./.data/pglite` | Local development only (embedded database when `DATABASE_URL` is unset). |
 
 ### `stringmind-web`

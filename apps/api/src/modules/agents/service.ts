@@ -8,6 +8,7 @@ import { getConnectionInfo } from '../../adapters/index.js';
 import type { HealthWithSample } from '../../adapters/health.js';
 import { AdapterError } from '../../adapters/types.js';
 import { encrypt, last4, randomToken } from '../../lib/crypto.js';
+import { PROMPT_METHOD, computeState, expireOpenTasks, freshClaim, patchConnConfig, promptConfig, promptConfigView, publishConnectionState } from '../../lib/agent-inbox.js';
 import { AppError, unprocessable } from '../../lib/errors.js';
 import { slugify } from '../../lib/http.js';
 import { assertSafeUrlForSave } from '../../lib/net-guard.js';
@@ -40,7 +41,7 @@ const HttpUrl = z.string().trim().url('Enter a valid URL').max(2000)
   .refine((u) => /^https?:\/\//i.test(u), 'URL must start with http:// or https://');
 
 export const ConnectionSchema = z.object({
-  method: z.enum(['api', 'custom_rest', 'webhook', 'sdk', 'a2a', 'mcp', 'sandbox']),
+  method: z.enum(['api', 'custom_rest', 'webhook', 'sdk', 'a2a', 'mcp', 'sandbox', 'prompt']),
   endpointUrl: HttpUrl.optional().nullable(),
   apiKey: z.string().trim().min(1).max(4000).optional().nullable(),
   config: z.record(z.unknown()).optional(),
@@ -66,7 +67,7 @@ export const ProfileFields = {
 /** Allowed connection methods per adapter kind. */
 const METHODS: Record<string, string[]> = {
   openai_compatible: ['api'], anthropic: ['api'], gemini: ['api'], sandbox: ['sandbox'],
-  custom_rest: ['custom_rest'], webhook: ['webhook', 'sdk'], a2a: ['a2a'], mcp: ['mcp'],
+  custom_rest: ['custom_rest'], webhook: ['webhook', 'sdk'], a2a: ['a2a'], mcp: ['mcp'], inbox: ['prompt'],
 };
 const NEEDS_ENDPOINT = new Set(['custom_rest', 'webhook', 'a2a', 'mcp']);
 const KEY_OPTIONAL_PROVIDERS = new Set(['meta-llama']);
@@ -98,6 +99,15 @@ export async function prepareConnection(provider: Provider, input: ConnectionInp
   const endpointUrl = input.endpointUrl ?? (existing?.method === input.method ? existing.endpointUrl : null) ?? null;
   if (NEEDS_ENDPOINT.has(provider.adapter) && !endpointUrl) throw unprocessable(`${provider.name} requires an endpoint URL`);
   if (provider.adapter === 'sandbox' && (input.endpointUrl || input.apiKey)) throw unprocessable('Sandbox agents take no endpoint or API key');
+  if (provider.adapter === 'inbox') {
+    // Connect-via-prompt: nothing is shared — the agent claims a one-time code and polls StringMind for tasks.
+    if (input.endpointUrl || input.apiKey) throw unprocessable('Connect-via-prompt agents take no endpoint or API key — the agent connects itself with a claim code');
+    const claim = freshClaim();
+    return {
+      values: { method: 'prompt', endpointUrl: null, credentialEnc: null, credentialLast4: null, config: claim.config, webhookSecretEnc: null },
+      webhookSecret: null, claim,
+    };
+  }
   // SSRF guard (private/loopback/metadata addresses, unless ALLOW_PRIVATE_NETWORK_URLS); re-checked per request.
   if (endpointUrl) await assertSafeUrlForSave(endpointUrl, 'Endpoint URL');
 
@@ -132,7 +142,7 @@ export async function prepareConnection(provider: Provider, input: ConnectionInp
   }
   return {
     values: { method: input.method, endpointUrl, credentialEnc, credentialLast4, config, webhookSecretEnc },
-    webhookSecret,
+    webhookSecret, claim: null,
   };
 }
 
@@ -143,7 +153,9 @@ export function connectionView(c: Connection | null | undefined) {
   if (!c) return null;
   return {
     method: c.method, endpointUrl: c.endpointUrl, status: c.status, credentialLast4: c.credentialLast4,
-    hasCredential: !!c.credentialEnc, hasWebhookSecret: !!c.webhookSecretEnc, config: c.config,
+    hasCredential: !!c.credentialEnc, hasWebhookSecret: !!c.webhookSecretEnc,
+    // prompt connections keep hashed secrets in config — expose only the safe timestamps
+    config: c.method === PROMPT_METHOD ? promptConfigView(promptConfig(c)) : c.config,
     lastTestedAt: c.lastTestedAt, lastError: c.lastError,
   };
 }
@@ -240,5 +252,17 @@ export async function healthCheckAll() {
     }
   } finally {
     await ensureHealthCheckScheduled();
+  }
+}
+
+/** Revoke a prompt connection's agent token + unclaimed code and expire its open tasks (disconnect / delete). No-op for other methods. */
+export async function revokePromptConnection(agentId: string, orgId: string, opts: { publishState?: boolean } = {}) {
+  const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, agentId)).limit(1);
+  if (!conn || conn.method !== PROMPT_METHOD) return;
+  await patchConnConfig(conn.id, { agentTokenHash: null, claimCodeHash: null, verifyNonce: null });
+  await expireOpenTasks(agentId);
+  if (opts.publishState !== false) {
+    const [fresh] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.id, conn.id)).limit(1);
+    await publishConnectionState(agentId, orgId, computeState(promptConfig(fresh)));
   }
 }

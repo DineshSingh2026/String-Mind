@@ -14,6 +14,7 @@ import { buildAgentContext, type AgentContext } from '../engine/context.js';
 import { createRuntime } from './factory.js';
 import { DEFAULT_TIMEOUT_MS, lastUserMessage } from './http.js';
 import { tryConsumeCall } from './usage.js';
+import { inboxTimeoutMs } from '../lib/agent-inbox.js';
 import { AdapterError, type AgentRuntime, type ConnectionInfo, type InvokeRequest, type InvokeResult } from './types.js';
 
 export async function getConnectionInfo(agentId: string): Promise<ConnectionInfo> {
@@ -83,7 +84,8 @@ export async function invokeAgent(
     context?.text ?? '',
   ].filter(Boolean).join('\n\n');
 
-  const timeoutMs = req.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // Inbox (connect-via-prompt) agents answer asynchronously by polling: they get the inbox timeout, not the HTTP one.
+  const timeoutMs = runtime.adapter === 'inbox' ? inboxTimeoutMs() : (req.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   let timer: NodeJS.Timeout | undefined;
   // Adapters enforce the timeout via AbortController; this guard also covers runtimes that don't.
   const guard = new Promise<never>((_, reject) => {

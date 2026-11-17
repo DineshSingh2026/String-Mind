@@ -13,7 +13,7 @@ export function listOf<T>(d: T[] | Paged<T> | { items?: T[] } | null | undefined
 }
 
 export type AgentStatus = 'draft' | 'active' | 'inactive' | 'suspended' | 'disconnected' | 'error' | string;
-export type ConnectionMethod = 'api_key' | 'custom_rest' | 'webhook' | 'a2a' | 'mcp' | 'sandbox';
+export type ConnectionMethod = 'api_key' | 'custom_rest' | 'webhook' | 'a2a' | 'mcp' | 'sandbox' | 'prompt';
 
 export interface Provider {
   id: string; slug: string; name: string; adapter: string; defaultBaseUrl: string | null;

@@ -52,7 +52,10 @@ export default {
   async rewrites() {
     // Same-origin API proxy so the httpOnly session cookie works without CORS.
     // Next forwards the incoming request headers (incl. the platform's X-Forwarded-For) to the API.
-    return [{ source: '/api/:path*', destination: `${API}/:path*` }];
+    return [
+      { source: '/api/:path*', destination: `${API}/:path*` },
+      // Agent-facing "Connect via prompt" instructions (served by the API).
+    ];
   },
   async headers() {
     return [{ source: '/:path*', headers: [

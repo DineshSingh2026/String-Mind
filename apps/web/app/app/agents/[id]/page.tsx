@@ -11,6 +11,7 @@ import {
 import { api, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { ScorecardView } from '@/components/app/ScorecardView';
+import { PromptConnectionCard, isPromptAgent } from '@/components/app/PromptConnect';
 import {
   BackLink, ConfirmModal, KV, LearningTypeBadge, ListSkeleton, Section, StatusPill, domainName, titleCase, useAction,
 } from '@/components/app/primitives';
@@ -64,11 +65,11 @@ export default function AgentDetailPage() {
           <Avatar name={agent.name} src={agent.avatarUrl} size={64} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-2xl font-semibold">{agent.name}</h1><StatusPill status={agent.status} />{agent.isPublic && <Badge tone="gold">Public</Badge>}</div>
-            <p className="mt-1 text-sm text-fg-muted">{agent.provider?.name ?? 'Unknown provider'}{agent.modelName ? ` · ${agent.modelName}` : ''}{agent.role ? ` · ${agent.role}` : ''}</p>
+            <p className="mt-1 text-sm text-fg-muted">{isPromptAgent(agent) ? 'Connected via prompt' : `${agent.provider?.name ?? 'Unknown provider'}${agent.modelName ? ` · ${agent.modelName}` : ''}`}{agent.role ? ` · ${agent.role}` : ''}</p>
           </div>
           <ScoreRing score={agent.overallScore ?? null} size={64} label="Overall score" />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 lg:max-w-[55%] lg:justify-end">
           {can('agents.connect') && <Button size="sm" variant="outline" loading={busy === 'test'} onClick={test} icon={<PlugZap className="h-4 w-4" />}>Test</Button>}
           {can('assessments.run') && <Button size="sm" variant="outline" loading={busy === 'assess'} onClick={assess} icon={<Activity className="h-4 w-4" />}>Run assessment</Button>}
           {can('training.request') && <Button size="sm" variant="ai" onClick={startTraining} icon={<GraduationCap className="h-4 w-4" />}>Start training</Button>}
@@ -89,7 +90,7 @@ export default function AgentDetailPage() {
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
       <div>
-        {tab === 'overview' && <Overview agent={agent} />}
+        {tab === 'overview' && <Overview agent={agent} canManage={can('agents.connect')} />}
         {tab === 'scorecard' && <ScorecardTab id={id} canAssess={can('assessments.run')} onAssess={assess} />}
         {tab === 'knowledge' && <KnowledgeTab id={id} canWrite={can('knowledge.write')} />}
         {tab === 'learning' && <LearningTab id={id} />}
@@ -112,18 +113,20 @@ export default function AgentDetailPage() {
   );
 }
 
-function Overview({ agent }: { agent: Agent }) {
+function Overview({ agent, canManage }: { agent: Agent; canManage: boolean }) {
   const c = agent.connection;
+  const viaPrompt = isPromptAgent(agent);
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      {viaPrompt && <div className="lg:col-span-2"><PromptConnectionCard agent={agent} canManage={canManage} /></div>}
       <Section title="Connection">
         <dl className="divide-y divide-line/50">
-          <KV k="Provider" v={agent.provider?.name ?? '—'} />
+          <KV k="Provider" v={viaPrompt ? 'Your own agent (via prompt)' : agent.provider?.name ?? '—'} />
           <KV k="Model" v={`${agent.modelName ?? '—'}${agent.modelVersion ? ` (${agent.modelVersion})` : ''}`} />
           <KV k="Method" v={titleCase(c?.method)} />
           <KV k="Connection status" v={<StatusPill status={c?.status} />} />
           <KV k="API health" v={<StatusPill status={agent.health ?? 'unknown'} />} />
-          <KV k="Credential" v={c?.credentialLast4 ? `•••• ${c.credentialLast4}` : 'None stored'} />
+          <KV k="Credential" v={viaPrompt ? 'None needed — keys stay with you' : c?.credentialLast4 ? `•••• ${c.credentialLast4}` : 'None stored'} />
           <KV k="Last test" v={fmtDateTime(c?.lastTestedAt)} />
         </dl>
         {c?.lastError && <div className="mt-3"><Alert tone="danger" title="Last error">{c.lastError}</Alert></div>}

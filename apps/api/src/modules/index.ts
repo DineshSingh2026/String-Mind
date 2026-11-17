@@ -21,6 +21,7 @@ import * as notifications from './notifications/routes.js';
 import * as analytics from './analytics/routes.js';
 import * as admin from './admin/routes.js';
 import * as pub from './public/routes.js';
+import * as agentApi from './agent-api/routes.js';
 
 type Mod = { default: (app: FastifyInstance) => Promise<void>; registerJobs?: () => void };
 
@@ -41,6 +42,7 @@ const table: [string, Mod][] = [
   ['/analytics', analytics],
   ['/admin', admin],
   ['/public', pub],
+  ['/agent-api', agentApi],
 ];
 
 export const MODULES = table.map(([prefix, m]) => ({ prefix, plugin: m.default }));

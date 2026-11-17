@@ -121,7 +121,7 @@ export const agentProviders = pgTable('agent_providers', {
   id: id(),
   slug: text('slug').notNull(),
   name: text('name').notNull(),
-  /** adapter kind: openai_compatible | anthropic | gemini | sandbox | custom_rest | webhook | a2a | mcp */
+  /** adapter kind: openai_compatible | anthropic | gemini | sandbox | custom_rest | webhook | a2a | mcp | inbox */
   adapter: text('adapter').notNull(),
   defaultBaseUrl: text('default_base_url'),
   defaultModels: jsonb('default_models').$type<string[]>().notNull().default([]),
@@ -194,7 +194,7 @@ export const agentVersions = pgTable('agent_versions', {
 export const agentConnections = pgTable('agent_connections', {
   id: id(),
   agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
-  /** api | custom_rest | webhook | sdk | a2a | mcp | sandbox */
+  /** api | custom_rest | webhook | sdk | a2a | mcp | sandbox | prompt */
   method: text('method').notNull(),
   endpointUrl: text('endpoint_url'),
   /** AES-256-GCM encrypted; never returned to clients */
@@ -209,6 +209,26 @@ export const agentConnections = pgTable('agent_connections', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex('agent_connections_agent_uq').on(t.agentId)]);
+
+/**
+ * Pull-model task inbox for agents connected via prompt (adapter `inbox`). StringMind enqueues a task, the agent
+ * long-polls GET /agent-api/tasks/next, answers with POST /agent-api/tasks/:id/result. `response` is untrusted text.
+ */
+export const agentTasks = pgTable('agent_tasks', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull(),
+  /** 'verify' | 'assessment' | 'training' | 'playground' | 'health' */
+  kind: text('kind').notNull(),
+  request: jsonb('request').$type<{ messages: { role: string; content: string }[]; system: string | null }>().notNull(),
+  /** 'pending' | 'delivered' | 'answered' | 'expired' */
+  status: text('status').notNull().default('pending'),
+  response: text('response'),
+  createdAt: createdAt(),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  answeredAt: timestamp('answered_at', { withTimezone: true }),
+  deadline: timestamp('deadline', { withTimezone: true }).notNull(),
+}, (t) => [index('agent_tasks_agent_status_idx').on(t.agentId, t.status, t.createdAt)]);
 
 /* ───────────────────────────── Capability & benchmarks ───────────────────────────── */
 

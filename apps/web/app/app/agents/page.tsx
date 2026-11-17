@@ -8,6 +8,9 @@ import { api, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { GridSkeleton, StatusPill, reputationName, titleCase, useAction } from '@/components/app/primitives';
 import { listOf, reputationLevel, type Agent, type Paged } from '@/components/app/types';
+import { PromptStatusBadge, isPromptAgent } from '@/components/app/PromptConnect';
+
+const AgentStatus = ({ a }: { a: Agent }) => (isPromptAgent(a) && a.status !== 'suspended' ? <PromptStatusBadge agentId={a.id} /> : <StatusPill status={a.status} />);
 
 function HealthDot({ health }: { health: string | null | undefined }) {
   const h = health ?? 'unknown';
@@ -54,15 +57,17 @@ export default function AgentsPage() {
                   <Avatar name={a.name} src={a.avatarUrl} size={48} />
                   <div className="min-w-0 flex-1">
                     <Link href={`/app/agents/${a.id}`} className="block truncate font-display text-[15px] font-semibold hover:underline">{a.name}</Link>
-                    <p className="truncate text-xs text-fg-muted">{a.provider?.name ?? '—'} · {a.modelName ?? '—'}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2"><StatusPill status={a.status} />{a.isPublic && <Badge tone="gold">Public</Badge>}</div>
+                    <p className="truncate text-xs text-fg-muted">{isPromptAgent(a) ? 'Connected via prompt' : `${a.provider?.name ?? '—'} · ${a.modelName ?? '—'}`}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2"><AgentStatus a={a} />{a.isPublic && <Badge tone="gold">Public</Badge>}</div>
                   </div>
                   <ScoreRing score={a.overallScore} size={50} label="Overall score" />
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-fg-muted">
-                  <HealthDot health={a.health} />
-                  <p>Connection: {titleCase(a.connection?.method)} · {titleCase(a.connection?.status)}{a.connection?.credentialLast4 ? ` · ••••${a.connection.credentialLast4}` : ''}</p>
-                  <p>Last test: {fmtRelative(a.connection?.lastTestedAt)}</p>
+                  {isPromptAgent(a) ? <p>Connection: Prompt · no API key stored</p> : <>
+                    <HealthDot health={a.health} />
+                    <p>Connection: {titleCase(a.connection?.method)} · {titleCase(a.connection?.status)}{a.connection?.credentialLast4 ? ` · ••••${a.connection.credentialLast4}` : ''}</p>
+                    <p>Last test: {fmtRelative(a.connection?.lastTestedAt)}</p>
+                  </>}
                   {reputationLevel(a.reputation) && <p>Reputation: {reputationName(reputationLevel(a.reputation))}</p>}
                   {a.connection?.lastError && <p className="text-danger-soft">Last error: {a.connection.lastError}</p>}
                 </div>
@@ -80,7 +85,7 @@ export default function AgentsPage() {
               {agents.map((a) => (
                 <tr key={a.id}>
                   <Td><div className="flex items-center gap-2.5"><Avatar name={a.name} src={a.avatarUrl} size={32} /><div className="min-w-0"><Link href={`/app/agents/${a.id}`} className="font-medium hover:underline">{a.name}</Link><p className="text-xs text-fg-subtle">{a.provider?.name} · {a.modelName}</p></div></div></Td>
-                  <Td><StatusPill status={a.status} /></Td>
+                  <Td><AgentStatus a={a} /></Td>
                   <Td><HealthDot health={a.health} /></Td>
                   <Td className="text-xs text-fg-muted">{titleCase(a.connection?.method)} · {titleCase(a.connection?.status)}</Td>
                   <Td><ScoreRing score={a.overallScore} size={36} /></Td>

@@ -6,9 +6,18 @@ import { db, schema } from '../../db/client.js';
 import { audit } from '../../lib/audit.js';
 import { parse } from '../../lib/http.js';
 import { notify } from '../../lib/notify.js';
+import { webOrigin } from '../../lib/agent-inbox.js';
+import { connectMarkdown } from '../agent-api/connect-md.js';
 import { buildCards, publicAgentWhere, selectPublicAgents } from '../marketplace/cards.js';
 
 export default async function routes(app: FastifyInstance) {
+  /** Agent-facing "Connect via prompt" instructions (also served by the web app at /connect.md). */
+  app.get('/connect.md', async (_req, reply) => {
+    reply.header('content-type', 'text/markdown; charset=utf-8');
+    reply.header('cache-control', 'public, max-age=300');
+    return connectMarkdown(webOrigin());
+  });
+
   app.get('/stats', async () => {
     const d = db();
     const [agents] = await d.select({ n: sql<number>`count(*)::int` }).from(schema.agents)

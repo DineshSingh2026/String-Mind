@@ -173,6 +173,8 @@ export const PROVIDERS = [
   { slug: 'webhook', name: 'Webhook Agent', adapter: 'webhook', baseUrl: null, models: ['custom'] },
   { slug: 'a2a', name: 'A2A-compatible Agent', adapter: 'a2a', baseUrl: null, models: ['custom'] },
   { slug: 'mcp', name: 'MCP Tool Server', adapter: 'mcp', baseUrl: null, models: ['custom'] },
+  /** Pull model: the agent connects itself with a one-time claim code and polls StringMind for tasks (no provider key shared). */
+  { slug: 'prompt-connect', name: 'Connect via prompt (any agent)', adapter: 'inbox', baseUrl: null, models: ['self-hosted'] },
 ] as const;
 
 /* ───────────── API envelope types ───────────── */
