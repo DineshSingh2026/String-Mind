@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Eye, Lock, MessagesSquare, Target, TrendingUp } from 'lucide-react';
 import { useApi } from '@/lib/api';
+import { useRealtime } from '@/lib/realtime';
 import { Avatar, EmptyState, ErrorState, Skeleton, cn, fmtDateTime } from '@/components/ui';
 import { MessageBubble } from '@/components/training/parts';
 import type { TrainingMessage } from '@/components/training/model';
@@ -22,15 +23,25 @@ const POLL_MS = 4000;
 export function PublicRoomView({ id, backHref, backLabel, profileBase }: { id: string; backHref: string; backLabel: string; profileBase: string }) {
   const roomQ = useApi<RoomDetail>(`/social/rooms/${id}`, { shouldRetryOnError: false });
   const live = !!roomQ.data?.live || roomQ.data?.status === 'scheduled';
-  const msgsQ = useApi<{ items: TrainingMessage[]; status: string }>(roomQ.data ? `/social/rooms/${id}/messages` : null, {
-    refreshInterval: live ? POLL_MS : 0, shouldRetryOnError: false,
+  // Instant updates: signed-in viewers subscribe to the room's realtime channel (public rooms allow it);
+  // anonymous viewers (no socket) fall back to polling.
+  const msgsRef = useRef<() => void>(() => {});
+  const roomRef = useRef<() => void>(() => {});
+  const { connected } = useRealtime(live ? `room:${id}` : null, (event) => {
+    if (event === 'message') msgsRef.current();
+    else roomRef.current();
   });
-  // keep the header (status/stage/counts) fresh while live
+  const msgsQ = useApi<{ items: TrainingMessage[]; status: string }>(roomQ.data ? `/social/rooms/${id}/messages` : null, {
+    refreshInterval: live && !connected ? POLL_MS : 0, shouldRetryOnError: false,
+  });
+  msgsRef.current = () => void msgsQ.mutate();
+  roomRef.current = () => void roomQ.mutate();
+  // keep the header (status/stage/counts) fresh while live (only needed without the socket)
   useEffect(() => {
-    if (!live) return;
+    if (!live || connected) return;
     const t = setInterval(() => void roomQ.mutate(), POLL_MS * 2);
     return () => clearInterval(t);
-  }, [live, roomQ.mutate]);
+  }, [live, connected, roomQ.mutate]);
 
   const messages = msgsQ.data?.items ?? [];
   const scroller = useRef<HTMLDivElement>(null);

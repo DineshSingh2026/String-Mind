@@ -31,6 +31,15 @@ export async function subscribe(ws: WebSocket, auth: AuthContext, channel: strin
 }
 
 export function publish(channel: string, event: string, data: unknown) {
+  // Public room watchers subscribe to `room:<id>`, which only ever receives a content-free "changed" ping
+  // (event name only); they then refetch the sanitised public view. Raw session payloads never reach them.
+  if (channel.startsWith('session:')) {
+    const watchers = subs.get(`room:${channel.slice(8)}`);
+    if (watchers?.size) {
+      const ping = JSON.stringify({ channel: `room:${channel.slice(8)}`, event: event === 'message' ? 'message' : 'changed', data: null });
+      for (const ws of watchers) if (ws.readyState === 1) ws.send(ping);
+    }
+  }
   const set = subs.get(channel);
   if (!set?.size) return;
   const msg = JSON.stringify({ channel, event, data });

@@ -37,7 +37,7 @@ function SearchPill({ className, autoFocus, onDone, compact }: { className?: str
       <Search aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle transition group-focus-within:text-electric" />
       <input
         id={id} type="search" value={q} onChange={(e) => setQ(e.target.value)} autoFocus={autoFocus}
-        placeholder="Search agents, skills, or topics..."
+        placeholder="Search agents or skills…"
         className={cx(
           'w-full rounded-full border border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-fg placeholder:text-fg-subtle transition-all focus:border-electric/70 focus:bg-ink-950/80 focus:outline-none focus:shadow-focus',
           compact ? 'h-9' : 'h-10',
@@ -327,22 +327,22 @@ export function SiteNav() {
               ))}
             </ul>
           </nav>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <SearchPill compact={scrolled} className="hidden w-[250px] xl:block 2xl:w-[300px]" />
+          <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap sm:gap-3">
+            <SearchPill compact={scrolled} className="hidden w-[210px] shrink xl:block 2xl:w-[280px]" />
             <Link href="/marketplace" aria-label="Search the marketplace" className="hidden rounded-full p-2 text-fg-muted hover:bg-white/[0.06] hover:text-fg lg:inline-flex xl:hidden">
               <Search className="h-5 w-5" />
             </Link>
             {signedIn ? (
-              <Link href="/app" className="group relative hidden h-10 items-center gap-2 overflow-hidden rounded-full bg-gold-sheen px-5 text-sm font-semibold text-ink-950 shadow-gold transition hover:brightness-110 sm:inline-flex">
+              <Link href="/app" className="group relative hidden h-10 shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap rounded-full bg-gold-sheen px-5 text-sm font-semibold text-ink-950 shadow-gold transition hover:brightness-110 sm:inline-flex">
                 <LayoutDashboard aria-hidden className="h-4 w-4" /> Open App
               </Link>
             ) : (
               <>
-                <Link href="/register" className="group relative hidden h-10 items-center overflow-hidden rounded-full bg-gold-sheen px-5 text-sm font-semibold text-ink-950 shadow-gold transition hover:brightness-110 sm:inline-flex">
+                <Link href="/register" className="group relative hidden h-10 shrink-0 items-center overflow-hidden whitespace-nowrap rounded-full bg-gold-sheen px-5 text-sm font-semibold text-ink-950 shadow-gold transition hover:brightness-110 sm:inline-flex">
                   <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                   <span className="relative">Get Started</span>
                 </Link>
-                <Link href="/sign-in" className="hidden px-1 text-sm font-medium text-fg-muted transition hover:text-fg sm:inline">Sign In</Link>
+                <Link href="/sign-in" className="hidden shrink-0 whitespace-nowrap px-1 text-sm font-medium text-fg-muted transition hover:text-fg sm:inline">Sign In</Link>
               </>
             )}
             <button

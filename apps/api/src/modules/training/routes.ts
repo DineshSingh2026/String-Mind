@@ -429,5 +429,11 @@ export function registerJobs() {
     const orgs = await db().select({ orgId: schema.memberships.orgId }).from(schema.memberships).where(eq(schema.memberships.userId, auth.user.id));
     return orgs.some((o) => o.orgId === s.l || o.orgId === s.t);
   });
+  // `room:<id>`: content-free change pings for watchers of a PUBLIC room (see ws/hub.ts publish); any signed-in user.
+  registerChannelGuard('room', async (_auth, id) => {
+    const [s] = await db().select({ v: schema.trainingSessions.visibility, m: schema.trainingSessions.moderation })
+      .from(schema.trainingSessions).where(eq(schema.trainingSessions.id, id)).limit(1);
+    return !!s && s.v === 'public' && s.m !== 'removed';
+  });
 }
 
