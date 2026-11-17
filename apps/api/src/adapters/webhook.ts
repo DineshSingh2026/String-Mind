@@ -1,5 +1,5 @@
 /**
- * Webhook agent: StringMind POSTs a signed request to the agent's endpoint and waits for a synchronous
+ * Webhook agent: Hive Mind POSTs a signed request to the agent's endpoint and waits for a synchronous
  * JSON reply ({ text } | { reply } | { output }).
  *   headers: x-aix-signature: t=<unix>,v1=<hmac_sha256(secret, `${t}.${body}`)>, x-aix-agent-id
  *   body:    { type: 'invoke', agentId, requestId, messages, system, maxTokens?, temperature?, purpose? }
@@ -29,7 +29,7 @@ export function createWebhookRuntime(info: ConnectionInfo): AgentRuntime {
         ...(req.purpose ? { purpose: req.purpose } : {}),
       });
       const headers: Record<string, string> = {
-        'content-type': 'application/json', accept: 'application/json', 'user-agent': 'StringMind-Agent-Webhook/1.0',
+        'content-type': 'application/json', accept: 'application/json', 'user-agent': 'Hive Mind-Agent-Webhook/1.0',
         'x-aix-agent-id': info.agentId, 'x-aix-signature': signWebhook(info.webhookSecret, body),
       };
       if (info.apiKey) headers.authorization = `Bearer ${info.apiKey}`;

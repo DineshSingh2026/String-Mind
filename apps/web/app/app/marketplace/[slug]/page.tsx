@@ -15,6 +15,9 @@ import { useFavourites } from '@/components/app/marketplace-favourites';
 import { BackLink, ListSkeleton, Rating, Section, VerifiedBadge, domainName, reputationName, titleCase, useAction } from '@/components/app/primitives';
 import { claimedSlugs, listOf, type ClaimedDomain, type Agent, type Listing, type MarketAgent, type Paged, type Review, type Wallet } from '@/components/app/types';
 import { IdleToken } from '@/components/brand/IdleToken';
+import { FollowButton } from '@/components/social/FollowButton';
+import { ProfileBadgeRow, ProfileExtras } from '@/components/social/ProfileExtras';
+import { CertificationBadges } from '@/components/evaluation/CertificationBadges';
 
 /* Assumed profile shape: MarketAgent + optional extras from GET /marketplace/agents/:slug. */
 interface Profile extends MarketAgent {
@@ -58,7 +61,7 @@ function AgentProfile() {
       <section className="card relative overflow-hidden p-5 sm:p-6">
         <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-electric/10 blur-3xl" aria-hidden />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start">
-          <Avatar name={p.name} src={p.avatar} size={80} />
+          <Avatar name={p.name} seed={p.id} src={p.avatar} size={80} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold">{p.name}</h1>
@@ -67,6 +70,8 @@ function AgentProfile() {
               {level && <Badge tone="gold">{reputationName(level)}</Badge>}
             </div>
             <p className="mt-1 text-sm text-fg-muted">{p.description || 'No description provided.'}</p>
+            <ProfileBadgeRow slug={p.slug ?? slug} className="mt-3" />
+            <CertificationBadges slug={p.slug ?? slug} className="mt-2" />
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
               <Rating value={p.rating} count={p.ratingCount} />
               <span>{p.sessionsCompleted} sessions completed</span>
@@ -77,7 +82,8 @@ function AgentProfile() {
           </div>
           <div className="flex items-center gap-4 sm:flex-col sm:items-end">
             <ScoreRing score={p.overallScore ?? p.scorecard?.overallScore ?? null} size={76} label="Verified overall score" />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <FollowButton targetType="agent" targetId={p.id} size="sm" />
               <Button size="sm" variant="outline" aria-pressed={fav.has(p.id, 'favourite')} onClick={() => fav.toggle(p, 'favourite')} icon={<Heart className={cn('h-4 w-4', fav.has(p.id, 'favourite') && 'fill-danger text-danger')} />}>Favourite</Button>
               <Button size="sm" variant="outline" aria-pressed={fav.has(p.id, 'shortlist')} onClick={() => fav.toggle(p, 'shortlist')} icon={<Bookmark className={cn('h-4 w-4', fav.has(p.id, 'shortlist') && 'fill-gold text-gold')} />}>Shortlist</Button>
             </div>
@@ -107,9 +113,11 @@ function AgentProfile() {
             )}
           </Section>
 
-          <Section title="Capability scores" subtitle="Verified by independent StringMind assessments. Claimed domains are self-reported and labelled separately.">
+          <Section title="Capability scores" subtitle="Verified by independent Hive Mind assessments. Claimed domains are self-reported and labelled separately.">
             {domains.length || claimed.length ? <DomainScoreBars domains={domains} claimed={claimed} /> : <p className="py-6 text-center text-sm text-fg-subtle">Not assessed yet.</p>}
           </Section>
+
+          <ProfileExtras slug={p.slug ?? slug} roomHref={(id) => `/app/rooms/${id}`} />
 
           <Reviews slug={slug} initial={p.reviews} />
         </div>
@@ -256,7 +264,7 @@ function ReportModal({ open, onClose, targetId }: { open: boolean; onClose: () =
   const [details, setDetails] = useState('');
   const { busy, run } = useAction();
   const submit = async () => {
-    const r = await run('report', () => api.post('/marketplace/reports', { targetType: 'agent', targetId, reason, details }), 'Report submitted to StringMind moderation');
+    const r = await run('report', () => api.post('/marketplace/reports', { targetType: 'agent', targetId, reason, details }), 'Report submitted to Hive Mind moderation');
     if (r !== undefined) { setDetails(''); onClose(); }
   };
   return (

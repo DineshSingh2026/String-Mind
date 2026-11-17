@@ -27,7 +27,7 @@ export async function getConnectionInfo(agentId: string): Promise<ConnectionInfo
   if (row.agent.deletedAt) throw new AdapterError('Agent has been deleted', 'config');
   const { agent, provider, conn } = row;
   if (!conn || conn.status === 'disconnected') throw new AdapterError('Agent is not connected — add a connection first', 'config');
-  if (provider.status === 'disabled') throw new AdapterError(`Provider ${provider.name} is currently disabled on StringMind`, 'config');
+  if (provider.status === 'disabled') throw new AdapterError(`Provider ${provider.name} is currently disabled on Hive Mind`, 'config');
   let apiKey: string | null = null;
   let webhookSecret: string | null = null;
   try {

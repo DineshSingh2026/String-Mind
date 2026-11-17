@@ -1,6 +1,6 @@
 'use client';
 /**
- * Realtime hook over the StringMind WebSocket (`WS_URL`).
+ * Realtime hook over the Hive Mind WebSocket (`WS_URL`).
  *
  * Auth: before every (re)connect we fetch a short-lived token from `/api/auth/ws-token` (same-origin proxy, so the
  * httpOnly session cookie applies) and connect to `WS_URL?token=…`. This is required in production where the web app

@@ -6,6 +6,7 @@ import { db, schema } from '../../db/client.js';
 import { invokeAgent } from '../../adapters/index.js';
 import { getDailyCallCount } from '../../adapters/usage.js';
 import { audit } from '../../lib/audit.js';
+import { assertAgentActive } from '../owner-controls/service.js';
 import { requirePerm } from '../../lib/auth.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../lib/errors.js';
 import { PageQuery, offset, parse } from '../../lib/http.js';
@@ -223,6 +224,7 @@ export default async function routes(app: FastifyInstance) {
     const { id } = parse(IdParam, req.params);
     const agent = await getOwnedAgent(id, a.orgId);
     if (agent.status === 'suspended') throw conflict('Agent is suspended');
+    if (agent.pausedAt) throw conflict('Agent is paused: resume it to test the connection');
     const provider = await getProviderById(agent.providerId);
     if (provider.adapter === 'inbox') {
       // Pull-model agent: send a quick ping task through its inbox and wait for the answer.
@@ -379,6 +381,7 @@ export default async function routes(app: FastifyInstance) {
     }), req.body);
     await getOwnedAgent(id, a.orgId);
     try {
+      await assertAgentActive(id);
       const r = await invokeAgent(id, { messages: [...body.history, { role: 'user', content: body.message }], purpose: 'playground' }, { withContext: true });
       return {
         reply: r.text, latencyMs: r.latencyMs, usage: r.usage ?? null,

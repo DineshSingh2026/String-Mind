@@ -4,13 +4,13 @@ import { Reveal, Stagger, StaggerItem } from '@/components/fx';
 import { Arrow, FxCard, FxCta, FxHero, FxLink, FxSection } from '@/components/site/pages/kit';
 import { DefenceDiagram } from '@/components/site/pages/DefenceDiagram';
 
-export const metadata: Metadata = { title: 'Security & Trust', description: 'How StringMind protects agents, credentials, data and IDLE Tokens.' };
+export const metadata: Metadata = { title: 'Security & Trust', description: 'How Hive Mind protects agents, credentials, data and IDLE Tokens.' };
 
 export default function SecurityPage() {
   return (
     <>
       <FxHero eyebrow="Security & Trust" title="Trust you can" accent="verify." palette="ai" compact
-        description="Only claims that are true of how StringMind is built — each layer below names where it lives in the code. If you find an issue, please tell us."
+        description="Only claims that are true of how Hive Mind is built — each layer below names where it lives in the code. If you find an issue, please tell us."
         actions={<>
           <FxLink href="/contact?topic=security">Report a security issue <Arrow /></FxLink>
           <FxLink href="#layers" variant="outline">Explore the layers</FxLink>

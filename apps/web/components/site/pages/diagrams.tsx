@@ -24,7 +24,7 @@ export function FlowOrbit({ className }: { className?: string }) {
   useEffect(() => { if (reduce) return; const id = setInterval(() => setK((x) => (x + 1) % FLOW.length), 1800); return () => clearInterval(id); }, [reduce]);
   const R = 38; // % of box
   return (
-    <div className={cx('relative mx-auto aspect-square w-full max-w-[460px]', className)} role="img" aria-label="StringMind loop: connect, assess, train, verify, earn">
+    <div className={cx('relative mx-auto aspect-square w-full max-w-[460px]', className)} role="img" aria-label="Hive Mind loop: connect, assess, train, verify, earn">
       <div aria-hidden className="absolute inset-[6%] rounded-full bg-[radial-gradient(circle,rgb(var(--electric)/0.16),transparent_65%)]" />
       <svg aria-hidden viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
         <defs>
@@ -41,7 +41,7 @@ export function FlowOrbit({ className }: { className?: string }) {
       </svg>
       {/* core */}
       <div className="absolute left-1/2 top-1/2 flex h-[30%] w-[30%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border border-gold/30 bg-ink-900/80 text-center shadow-[0_0_60px_-10px_rgb(var(--gold)/0.6)] backdrop-blur">
-        <span className="font-display text-2xl font-semibold text-gold-gradient sm:text-3xl">StringMind</span>
+        <span className="font-display text-2xl font-semibold text-gold-gradient sm:text-3xl">Hive Mind</span>
         <motion.span key={k} initial={reduce ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-fg-muted">{FLOW[k].label}</motion.span>
       </div>
       {FLOW.map((f, i) => {

@@ -1,5 +1,5 @@
 /**
- * StringMind double-entry ledger service — the ONLY code allowed to change wallet balances.
+ * Hive Mind double-entry ledger service — the ONLY code allowed to change wallet balances.
  *
  * Accounting model
  * ────────────────
@@ -9,14 +9,14 @@
  * corrections are new transactions (`reversalOf`). Every operation has a deterministic
  * idempotency key (unique index on transactions.idempotency_key) so retries never double-post.
  *
- * Unit: IDLE Tokens (docs/IDLE_TOKENS.md). StringMind is a pure token economy — IDLE is never money.
+ * Unit: IDLE Tokens (docs/IDLE_TOKENS.md). Hive Mind is a pure token economy — IDLE is never money.
  *
  * Buckets (ledger_entries.bucket) → cached column:
  *   org wallet       available    → wallets.available     spendable IDLE (welcome bonus, earnings, refunds)
  *                    locked       → wallets.locked        escrow for training (+ payouts in flight, fiat mode only)
  *                    withdrawable → wallets.withdrawable  LEGACY: earnings before the IDLE switch; only the dormant
  *                                                         FIAT_ENABLED payout path reads it. Nothing new lands here.
- *   platform wallet  revenue      → wallets.available     StringMind platform commission (IDLE)
+ *   platform wallet  revenue      → wallets.available     Hive Mind platform commission (IDLE)
  *   external wallet  external     → wallets.available     issuance counterparty (goes negative as IDLE is minted)
  *
  * Policy: earnings (training settlement, knowledge sales) land in `available` and are immediately
@@ -528,7 +528,7 @@ export async function grantWelcomeBonus(userId: string, tx?: DbOrTx): Promise<{ 
     });
     if (r.created) {
       await audit({ action: 'wallet.welcome_bonus', targetType: 'wallet', targetId: w.id, orgId: u.defaultOrgId, actorUserId: userId, actorType: 'system', metadata: { transactionId: r.id, amount: WELCOME_BONUS_IDLE } }, null, t);
-      await notify(userId, 'payment_update', 'Welcome to StringMind — 1,000 IDLE Tokens added',
+      await notify(userId, 'payment_update', 'Welcome to Hive Mind — 1,000 IDLE Tokens added',
         `${fmtIdle(WELCOME_BONUS_IDLE)} were added to your wallet. Spend them on training and knowledge, and earn more by teaching other agents.`, '/wallet', t);
     }
     return { granted: r.created, transactionId: r.id, amount: WELCOME_BONUS_IDLE };

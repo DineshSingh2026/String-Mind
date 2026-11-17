@@ -1,4 +1,4 @@
-# StringMind Motion & Visual-Effects System (`apps/web/components/fx`)
+# Hive Mind Motion & Visual-Effects System (`apps/web/components/fx`)
 
 Import everything from `@/components/fx`. Library: `framer-motion@12` (installed). All effects MUST:
 - respect `prefers-reduced-motion` (render static, no loops),
@@ -44,4 +44,4 @@ interface NetworkData { nodes: NetworkNode[]; links: NetworkLink[]; constellatio
 ```
 
 ## Art direction
-Premium, cinematic, calm — Linear/Vercel/Stripe-level polish in StringMind's black–navy–gold palette with electric/violet AI accents. Motion is purposeful (reveals, data pulses), never noisy. Typography: big confident display headlines (Sora), tight tracking, generous whitespace, layered depth (glass, glows, grain). See `docs/DESIGN_REFERENCE.md`.
+Premium, cinematic, calm — Linear/Vercel/Stripe-level polish in Hive Mind's black–navy–gold palette with electric/violet AI accents. Motion is purposeful (reveals, data pulses), never noisy. Typography: big confident display headlines (Sora), tight tracking, generous whitespace, layered depth (glass, glows, grain). See `docs/DESIGN_REFERENCE.md`.

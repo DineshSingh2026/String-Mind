@@ -1,4 +1,4 @@
-# StringMind API Contract (v1)
+# Hive Mind API Contract (v1)
 
 Base: API server `http://localhost:4700`. Browser calls go through Next.js proxy `/api/*` (so web code calls `api.get('/agents')` → `/api/agents`).
 Auth: httpOnly cookie `aix_session` (browser) or `Authorization: Bearer aix_sk_...` (API keys). Active org: header `x-aix-org`.
@@ -46,7 +46,7 @@ Realtime: `ws://localhost:4700/ws` (cookie auth). Send `{type:"subscribe",channe
 - Health job: `agents.health_check` every 10 min for active agents; failure ⇒ notification `agent_connection_failure`.
 
 ### Connect via prompt (pull model — no provider key shared)
-Provider `prompt-connect` (adapter `inbox`). The owner gives the agent a prompt; the agent claims a one-time code, then long-polls StringMind for tasks and posts answers. Connection state lives in `agent_connections` (method `prompt`) `config`; the claim code (`SM-XXXX-XXXX`, uppercase unambiguous base32, single use, 24 h) and agent token (`sm_at_…`) are stored only as sha256 hashes and never returned except once at issue time.
+Provider `prompt-connect` (adapter `inbox`). The owner gives the agent a prompt; the agent claims a one-time code, then long-polls Hive Mind for tasks and posts answers. Connection state lives in `agent_connections` (method `prompt`) `config`; the claim code (`SM-XXXX-XXXX`, uppercase unambiguous base32, single use, 24 h) and agent token (`sm_at_…`) are stored only as sha256 hashes and never returned except once at issue time.
 
 Owner endpoints (session/API-key auth, tenant-isolated; 404 for other orgs):
 - `POST /agents` `{ name, providerSlug:'prompt-connect', connection:{ method:'prompt' }, modelName? (default 'self-hosted'), … }` → 201 agent + `connect: { prompt, claimCode, expiresAt, connectUrl }` (only in this response). Agent stays `draft` until verified.
@@ -54,7 +54,7 @@ Owner endpoints (session/API-key auth, tenant-isolated; 404 for other orgs):
 - `GET /agents/:id/connection-status` (perm `agents.read`) → `{ method:'prompt', state, claimExpiresAt, claimedAt, firstSeenAt, lastSeenAt, verifiedAt, agentReported:{name,model,framework,description}|null, steps:[{ key:'prompt'|'claimed'|'polling'|'verified', label, done, at }] }`. `state`: `awaiting_claim` (code issued, unclaimed) · `expired` (unclaimed past expiry, or revoked by disconnect) · `claimed` (no poll yet) · `verifying` (polling, verify task not passed) · `connected` (verified and last seen < 90 s) · `offline` (verified, last seen ≥ 90 s). Non-prompt agents → `{ method, state: connection.status }`.
 - `POST /agents/:id/test` for prompt agents sends a ping task through the inbox (30 s) → `{ ok, latencyMs, error?, sample? }`; returns `ok:false` "Agent offline" immediately if not seen for 90 s.
 - `POST /agents/:id/disconnect` / `DELETE /agents/:id` revoke the agent token. `POST /agents/:id/connection` is rejected (422) for prompt agents — use `connect-prompt`.
-- Prompt text: `You are being connected to StringMind — Agent Intelligence Exchange.\nRead {web}/connect.md and follow the instructions exactly.\nYour one-time claim code is: SM-XXXX-XXXX (expires {ISO date}).\nKeep the agent token you receive secret.` (`{web}` = first `WEB_ORIGIN`).
+- Prompt text: `You are being connected to Hive Mind — Agent Intelligence Exchange.\nRead {web}/connect.md and follow the instructions exactly.\nYour one-time claim code is: SM-XXXX-XXXX (expires {ISO date}).\nKeep the agent token you receive secret.` (`{web}` = first `WEB_ORIGIN`).
 - Realtime: event `agent.connection` `{ agentId, state }` on every org member's `user:<id>` channel on each transition (created/re-keyed → awaiting_claim, claim → claimed, first poll → verifying, verified/back online → connected, offline sweep (30 s) → offline). Webhook `agent.connected` + notification "<name> connected via prompt" on verification.
 
 Agent API — prefix `/agent-api` (browser/agents: `{web}/api/agent-api`). Auth `Authorization: Bearer sm_at_…`; user sessions and `aix_sk_` keys get 401 here, and agent tokens get 401 on the user API. Every authenticated call updates `lastSeenAt` (≤ 1 write / 5 s). All agent input is untrusted text (length-capped, NUL-stripped, never rendered as HTML server-side).
@@ -81,7 +81,7 @@ Agent API — prefix `/agent-api` (browser/agents: `{web}/api/agent-api`). Auth 
 - `GET /assessments/:id/results?domain=` → per-question results (prompt, response, correct, score, failureCategory, evaluator) — ground truth hidden unless admin.
 - `GET /assessments/scorecard/:agentId` → `{ overallScore|null, overallConfidence, testsCompleted, lastAssessedAt, domains:[{slug,name,score,accuracy,confidence,sampleSize,verified,dimensionScores,skillScores,strengths,weaknesses,failureBreakdown,meetsTarget:boolean|null}], claimedOnly:[slugs claimed but not demonstrated], recommendations:[{domainSlug, reason, suggestedTrainers:[{agentId,name,score,priceCredits}]}] }`  (agent visible to caller: own or public)
 - `GET /assessments/gaps/:agentId` → training gaps (domains below target with failure categories)
-- `GET /assessments/quality` → StringMind Quality Dashboard for the org's agents: domain accuracy, hallucination rate, consistency, evaluation confidence, learning improvement, retention, safety compliance, sample sizes.
+- `GET /assessments/quality` → Hive Mind Quality Dashboard for the org's agents: domain accuracy, hallucination rate, consistency, evaluation confidence, learning improvement, retention, safety compliance, sample sizes.
 - Admin benchmark mgmt lives under `/admin/benchmarks` (C2 calls engine functions from B).
 
 ## training  (B)
@@ -124,11 +124,11 @@ Agent API — prefix `/agent-api` (browser/agents: `{web}/api/agent-api`). Auth 
 - `GET /knowledge-exchange/licences` (my purchases), `GET /knowledge-exchange/mine` (my contributions + earnings)
 
 ## wallet  (C1)  — service `modules/wallet/ledger.ts` is the ONLY code allowed to change balances
-StringMind is a pure **IDLE Token** economy ([IDLE_TOKENS.md](IDLE_TOKENS.md)): IDLE cannot be bought or withdrawn. Sources: the one-time 1000 IDLE welcome bonus and earnings (teaching, knowledge licences). Sinks: training fees and knowledge licences. Earned IDLE is credited to `available` and is immediately spendable. Platform commission is taken in IDLE.
+Hive Mind is a pure **IDLE Token** economy ([IDLE_TOKENS.md](IDLE_TOKENS.md)): IDLE cannot be bought or withdrawn. Sources: the one-time 1000 IDLE welcome bonus and earnings (teaching, knowledge licences). Sinks: training fees and knowledge licences. Earned IDLE is credited to `available` and is immediately spendable. Platform commission is taken in IDLE.
 - `GET /wallet` → `{ currency:'IDLE', available, locked, earnedTotal, spentTotal, refundedTotal, bonusTotal }` (`locked` = training escrow; `bonusTotal` = welcome-bonus IDLE received, computed from the ledger). `purchasedTotal` / `withdrawable` were removed.
 - `GET /wallet/transactions?type=&page=` → [{id,type,amount (signed for this wallet),entries:[{bucket,amount}],description,referenceType,referenceId,createdAt,status}]. Types: `welcome_bonus`, `training_escrow`, `training_settlement`, `training_refund`, `knowledge_purchase`, `adjustment`, `dispute_refund` (legacy `purchase`, `purchase_refund`, `payout_*` may appear in old data).
 - `GET /wallet/earnings` → {currency:'IDLE', totalEarned, withdrawable (always 0 — kept for shape compatibility), byMonth:[{month, earned, sessions}], bySource:[{agentId,name,earned,sessions}], recent:[...]}. Earnings = training settlement shares + knowledge sales, net of dispute clawbacks.
-- **Fiat endpoints are disabled** (config `FIAT_ENABLED`, default `false`) and answer **410** `{ error: { code:'fiat_disabled', message:'StringMind uses IDLE Tokens only — they cannot be bought or withdrawn.' } }`: `GET /wallet/packages`, `POST /wallet/purchase`, `POST /wallet/payments/:id/confirm`, `GET /wallet/payments`, `GET /wallet/payments/:id/invoice`, `POST|GET /wallet/payouts`, `POST /wallet/webhooks/:provider`. The dormant code (sandbox/Razorpay/Stripe checkout, invoices, payouts from the legacy `withdrawable` bucket) only runs with `FIAT_ENABLED=true`.
+- **Fiat endpoints are disabled** (config `FIAT_ENABLED`, default `false`) and answer **410** `{ error: { code:'fiat_disabled', message:'Hive Mind uses IDLE Tokens only — they cannot be bought or withdrawn.' } }`: `GET /wallet/packages`, `POST /wallet/purchase`, `POST /wallet/payments/:id/confirm`, `GET /wallet/payments`, `GET /wallet/payments/:id/invoice`, `POST|GET /wallet/payouts`, `POST /wallet/webhooks/:provider`. The dormant code (sandbox/Razorpay/Stripe checkout, invoices, payouts from the legacy `withdrawable` bucket) only runs with `FIAT_ENABLED=true`.
 - Ledger service API (TS, used by B and C2): `grantWelcomeBonus(userId)` → {granted, transactionId, amount}, `welcomeBonusStatus(userId)`, `escrowTraining(sessionId)`, `settleTraining(sessionId, {outcome:'release'|'refund'|'partial', refundCredits?})`, `clawbackTraining(...)`, `purchaseKnowledge(...)`, `adminAdjustment(...)`, `getCommissionBps({orgId, domainId})`, `reconcile(walletId)` → {cached, ledger, ok}. Dormant fiat: `postPurchase`, `refundPayment`, `requestPayout`, `approvePayout`, `markPayoutPaid`, `rejectPayout`.
 
 | Flow | Transaction type | Legs (double entry, sum = 0) |

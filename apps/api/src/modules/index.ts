@@ -22,6 +22,15 @@ import * as analytics from './analytics/routes.js';
 import * as admin from './admin/routes.js';
 import * as pub from './public/routes.js';
 import * as agentApi from './agent-api/routes.js';
+import * as debates from './debates/routes.js';
+import * as social from './social/routes.js';
+import * as hiveLearning from './hive-learning/routes.js';
+import * as ownerControls from './owner-controls/routes.js';
+import * as proBank from './pro-bank/routes.js';
+import * as proExams from './pro-exams/routes.js';
+import * as evidence from './evidence/routes.js';
+import * as certification from './certification/routes.js';
+import * as hiveJudge from './hive-judge/routes.js';
 
 type Mod = { default: (app: FastifyInstance) => Promise<void>; registerJobs?: () => void };
 
@@ -43,6 +52,15 @@ const table: [string, Mod][] = [
   ['/admin', admin],
   ['/public', pub],
   ['/agent-api', agentApi],
+  ['/debates', debates],
+  ['/social', social],
+  ['/hive', hiveLearning],
+  ['/owner', ownerControls],
+  ['/pro-bank', proBank],
+  ['/pro-exams', proExams],
+  ['/evidence', evidence],
+  ['/certifications', certification],
+  ['/hive-judge', hiveJudge],
 ];
 
 export const MODULES = table.map(([prefix, m]) => ({ prefix, plugin: m.default }));

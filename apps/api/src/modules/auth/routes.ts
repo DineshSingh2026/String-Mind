@@ -185,7 +185,7 @@ export default async function routes(app: FastifyInstance) {
     const revoked = await revokeUserSessions(u.id, a.sessionId);
     await audit({ action: 'auth.password_change', targetType: 'user', targetId: u.id, metadata: { otherSessionsRevoked: revoked } }, req);
     await notify(u.id, 'security_alert', 'Your password was changed',
-      'Your StringMind password was just changed and your other sessions were signed out. If this was not you, reset your password and contact support immediately.');
+      'Your Hive Mind password was just changed and your other sessions were signed out. If this was not you, reset your password and contact support immediately.');
     return { ok: true, otherSessionsRevoked: revoked };
   });
 
@@ -196,7 +196,7 @@ export default async function routes(app: FastifyInstance) {
     const secret = totp.generateSecret();
     await db().update(schema.users).set({ mfaSecretEnc: encrypt(secret), updatedAt: new Date() }).where(eq(schema.users.id, u!.id));
     await audit({ action: 'auth.mfa_setup', targetType: 'user', targetId: u!.id }, req);
-    return { secret, otpauthUrl: totp.keyuri(u!.email, 'StringMind', secret) };
+    return { secret, otpauthUrl: totp.keyuri(u!.email, 'Hive Mind', secret) };
   });
 
   app.post('/mfa/enable', { config: strictLimit(10) }, async (req) => {
@@ -208,7 +208,7 @@ export default async function routes(app: FastifyInstance) {
     if (!totp.check(code, decrypt(u!.mfaSecretEnc))) throw badRequest('Incorrect authentication code');
     await db().update(schema.users).set({ mfaEnabled: true, updatedAt: new Date() }).where(eq(schema.users.id, u!.id));
     await audit({ action: 'auth.mfa_enable', targetType: 'user', targetId: u!.id }, req);
-    await notify(u!.id, 'security_alert', 'Two-factor authentication enabled', 'Two-factor authentication is now required when you sign in to StringMind. If this was not you, contact support immediately.');
+    await notify(u!.id, 'security_alert', 'Two-factor authentication enabled', 'Two-factor authentication is now required when you sign in to Hive Mind. If this was not you, contact support immediately.');
     return { ok: true, mfaEnabled: true };
   });
 
@@ -220,7 +220,7 @@ export default async function routes(app: FastifyInstance) {
     if (!totp.check(code, decrypt(u!.mfaSecretEnc))) throw badRequest('Incorrect authentication code');
     await db().update(schema.users).set({ mfaEnabled: false, mfaSecretEnc: null, updatedAt: new Date() }).where(eq(schema.users.id, u!.id));
     await audit({ action: 'auth.mfa_disable', targetType: 'user', targetId: u!.id }, req);
-    await notify(u!.id, 'security_alert', 'Two-factor authentication disabled', 'Two-factor authentication was turned off for your StringMind account. If this was not you, change your password and contact support immediately.');
+    await notify(u!.id, 'security_alert', 'Two-factor authentication disabled', 'Two-factor authentication was turned off for your Hive Mind account. If this was not you, change your password and contact support immediately.');
     return { ok: true, mfaEnabled: false };
   });
 

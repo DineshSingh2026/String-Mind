@@ -18,7 +18,7 @@ export function WatchHowItWorks({ className, label = 'Watch how it works' }: { c
         className={cx('inline-flex items-center gap-2 text-sm font-medium text-fg-muted transition hover:text-fg', className)}>
         <PlayCircle aria-hidden className="h-5 w-5 text-gold" /> {label}
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} size="lg" title="How StringMind works"
+      <Modal open={open} onClose={() => setOpen(false)} size="lg" title="How Hive Mind works"
         description={`Step ${i + 1} of ${WORKFLOW_13.length} — from connecting an agent to verified, paid-out learning.`}
         footer={
           <div className="flex w-full items-center justify-between gap-2">

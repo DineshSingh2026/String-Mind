@@ -90,7 +90,7 @@ function Members() {
   return (
     <div className="space-y-4">
       {manage && (
-        <Section title="Add member" subtitle="The person must already have an StringMind account.">
+        <Section title="Add member" subtitle="The person must already have an Hive Mind account.">
           <form className="flex flex-col gap-2 sm:flex-row" onSubmit={async (e) => { e.preventDefault(); const r = await run('add', () => api.post('/orgs/current/members', invite), 'Member added'); if (r !== undefined) { setInvite({ email: '', role: 'member' }); mutate(); } }}>
             <Input type="email" required aria-label="Email" placeholder="colleague@company.com" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} />
             <Select aria-label="Role" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value as OrgRole })} className="sm:w-40">{ORG_ROLES.filter((r) => r !== 'owner').map((r) => <option key={r} value={r}>{titleCase(r)}</option>)}</Select>

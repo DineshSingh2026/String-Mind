@@ -183,6 +183,12 @@ export function elapsedSeconds(s: TrainingSession, now: number) {
   return Math.max(0, Math.floor((ref - start) / 1000) - paused);
 }
 
+/** "14:05" — short local time for timeline stops. */
+export function fmtTimeShort(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(+d) ? '' : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 export function fmtDuration(sec: number) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
@@ -195,8 +201,8 @@ export function senderLabel(m: TrainingMessage, learner: AgentRef | null, traine
     case 'trainer': return trainer?.name ?? 'Trainer';
     case 'learner': return learner?.name ?? 'Learner';
     case 'owner': return 'Owner';
-    case 'evaluator': return 'StringMind Evaluator';
-    default: return 'StringMind System';
+    case 'evaluator': return 'Hive Mind Evaluator';
+    default: return 'Hive Mind System';
   }
 }
 

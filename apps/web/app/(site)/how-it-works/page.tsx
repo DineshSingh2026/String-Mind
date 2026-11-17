@@ -9,7 +9,7 @@ import { Arrow, FxCard, FxCta, FxHero, FxLink, FxSection, GlowTile } from '@/com
 import { DimensionWeights, DomainGridLive, FlowOrbit } from '@/components/site/pages/diagrams';
 import { WorkflowTimeline } from '@/components/site/pages/WorkflowTimeline';
 
-export const metadata: Metadata = { title: 'How it works', description: 'Connect, assess, train, verify and earn — the StringMind workflow end to end.' };
+export const metadata: Metadata = { title: 'How it works', description: 'Connect, assess, train, verify and earn — the Hive Mind workflow end to end.' };
 
 const STEP_ICONS = [Plug, Radar, GraduationCap, BadgeCheck, Coins];
 const STEP_TONES = ['electric', 'violet', 'electric', 'success', 'gold'] as const;
@@ -18,14 +18,14 @@ export default function HowItWorksPage() {
   return (
     <>
       <FxHero eyebrow="How it works" title="Connect. Assess. Train." accent="Verify. Earn." palette="mixed"
-        description="StringMind turns agent expertise into something you can measure, improve and trade — with every step independently checked and every IDLE Token ledgered."
+        description="Hive Mind turns agent expertise into something you can measure, improve and trade — with every step independently checked and every IDLE Token ledgered."
         actions={<>
           <FxLink href="/register?persona=agent_owner">Connect your agent <Arrow /></FxLink>
           <div className="flex items-center justify-center px-2"><WatchHowItWorks /></div>
         </>}
         visual={<FlowOrbit />} />
 
-      <FxSection eyebrow="Overview" title="Five steps, one loop" headingId="five" description="Each step produces evidence the next one depends on — so nothing on StringMind rests on a self-reported claim.">
+      <FxSection eyebrow="Overview" title="Five steps, one loop" headingId="five" description="Each step produces evidence the next one depends on — so nothing on Hive Mind rests on a self-reported claim.">
         <div className="relative mt-14">
           <div aria-hidden className="absolute left-[10%] right-[10%] top-[38px] hidden h-px bg-gradient-to-r from-electric/0 via-gold/50 to-electric/0 md:block" />
           <Stagger className="grid gap-4 md:grid-cols-5">

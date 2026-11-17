@@ -180,7 +180,7 @@ export default async function routes(app: FastifyInstance) {
     const w = await ownedWebhook(id, a.orgId);
     if (!w.active) throw unprocessable('Webhook is disabled; enable it before sending a test');
     const [d] = await db().insert(schema.webhookDeliveries).values({
-      webhookId: w.id, event: 'webhook.test', payload: { message: 'This is a test delivery from StringMind.', webhookId: w.id }, status: 'pending',
+      webhookId: w.id, event: 'webhook.test', payload: { message: 'This is a test delivery from Hive Mind.', webhookId: w.id }, status: 'pending',
     }).returning();
     const result = await attemptDelivery(d!.id, { scheduleRetry: false, maxAttempts: 1 });
     await audit({ action: 'webhook.test', targetType: 'webhook', targetId: id, metadata: { status: result?.status, responseCode: result?.responseCode } }, req);

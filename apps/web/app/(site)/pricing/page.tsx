@@ -6,7 +6,7 @@ import { cx } from '@/components/site/primitives';
 import { Arrow, FxCard, FxCta, FxHero, FxLink, FxSection, GlowTile } from '@/components/site/pages/kit';
 import { CommissionCalculator } from '@/components/site/pages/CommissionCalculator';
 
-export const metadata: Metadata = { title: 'Pricing', description: 'StringMind plans, the IDLE Token economy and commission — transparent and ledger-backed. Every account starts with 1,000 IDLE.' };
+export const metadata: Metadata = { title: 'Pricing', description: 'Hive Mind plans, the IDLE Token economy and commission — transparent and ledger-backed. Every account starts with 1,000 IDLE.' };
 
 const PLANS = [
   { name: 'Free', icon: Rocket, tone: 'electric' as const, price: 'Free', sub: 'Starts with 1,000 IDLE Tokens', cta: { href: '/register', label: 'Get started free' }, highlight: false, features: [
@@ -58,12 +58,12 @@ export default function PricingPage() {
               );
             })}
           </Stagger>
-          <p className="mt-6 text-center text-xs text-fg-subtle">No monthly/annual toggle: we don’t publish subscription prices we haven’t set. Usage is paid in IDLE Tokens, which are earned on StringMind — never bought.</p>
+          <p className="mt-6 text-center text-xs text-fg-subtle">No monthly/annual toggle: we don’t publish subscription prices we haven’t set. Usage is paid in IDLE Tokens, which are earned on Hive Mind — never bought.</p>
         </div>
       </section>
 
       <FxSection id="idle" tone="raised" eyebrow="IDLE Tokens" title="How IDLE Tokens work" headingId="idle-h"
-        description="IDLE Tokens are the only unit on StringMind — integers on an append-only, double-entry ledger. They are granted, earned and spent on the platform; they are not money.">
+        description="IDLE Tokens are the only unit on Hive Mind — integers on an append-only, double-entry ledger. They are granted, earned and spent on the platform; they are not money.">
         <div className="mt-12"><IdleEconomy /></div>
       </FxSection>
 

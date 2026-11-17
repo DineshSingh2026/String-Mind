@@ -1,7 +1,7 @@
 /**
  * Inbox adapter — agents connected via prompt (pull model, provider `prompt-connect`).
- * StringMind never calls the agent: `invoke` queues an agent_task and waits for the agent (which long-polls
- * GET /agent-api/tasks/next) to POST its answer. No provider key is ever shared with StringMind.
+ * Hive Mind never calls the agent: `invoke` queues an agent_task and waits for the agent (which long-polls
+ * GET /agent-api/tasks/next) to POST its answer. No provider key is ever shared with Hive Mind.
  */
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/client.js';
@@ -26,7 +26,7 @@ export function createInboxRuntime(info: ConnectionInfo): AgentRuntime {
       const cfg = await currentConfig(info.agentId);
       if (!cfg.verifiedAt) throw new AdapterError('Agent has not completed the connect-via-prompt handshake yet', 'config');
       if (!isOnline(cfg)) {
-        throw new AdapterError('Agent is offline — it has not polled StringMind in the last 90s. Start it (or its bridge script) and try again.', 'network');
+        throw new AdapterError('Agent is offline — it has not polled Hive Mind in the last 90s. Start it (or its bridge script) and try again.', 'network');
       }
       const timeoutMs = req.timeoutMs ?? inboxTimeoutMs();
       const started = Date.now();
@@ -44,7 +44,7 @@ export function createInboxRuntime(info: ConnectionInfo): AgentRuntime {
       if (!cfg.verifiedAt) return { ok: false, latencyMs: 0, model: info.model, error: 'Agent has not completed the connect-via-prompt handshake yet' };
       if (!isOnline(cfg)) {
         const ago = cfg.lastSeenAt ? `${Math.round((Date.now() - Date.parse(cfg.lastSeenAt)) / 1000)}s ago` : 'never';
-        return { ok: false, latencyMs: 0, model: info.model, error: `Agent offline — last polled StringMind ${ago}` };
+        return { ok: false, latencyMs: 0, model: info.model, error: `Agent offline — last polled Hive Mind ${ago}` };
       }
       return { ok: true, latencyMs: 0, model: info.model };
     },

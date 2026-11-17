@@ -1,4 +1,4 @@
-# Render Blueprint for StringMind (AIX monorepo). Step-by-step guide: docs/DEPLOY_RENDER.md
+# Render Blueprint for Hive Mind (AIX monorepo). Step-by-step guide: docs/DEPLOY_RENDER.md
 #
 #   stringmind-db   managed PostgreSQL (pgvector is available; the API runs CREATE EXTENSION vector on boot)
 #   stringmind-api  Fastify API  (apps/api, TypeScript run with tsx)   → https://stringmind-api.onrender.com

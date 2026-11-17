@@ -4,8 +4,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   LayoutDashboard, Users, Bot, Plug, FlaskConical, GraduationCap, ShieldAlert, Landmark, Percent, CreditCard, Siren, Gavel,
-  ScrollText, Lock, Settings, Cog, HeartPulse, Menu, X, ArrowLeft, ShieldX,
+  ScrollText, Lock, Settings, Cog, HeartPulse, Menu, X, ArrowLeft, ShieldX, Sparkles, Scale,
 } from 'lucide-react';
+import { LibraryBig } from 'lucide-react';
 import { LogoMark, Wordmark } from '@/components/brand/Logo';
 import { Button, Spinner, cn } from '@/components/ui';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -21,7 +22,10 @@ const NAV = [
   { href: '/admin/agents', label: 'Agents', icon: Bot },
   { href: '/admin/providers', label: 'Providers', icon: Plug },
   { href: '/admin/benchmarks', label: 'Benchmarks & review', icon: FlaskConical },
+  { href: '/admin/question-bank', label: 'Question bank', icon: LibraryBig },
   { href: '/admin/training', label: 'Training sessions', icon: GraduationCap },
+  { href: '/admin/hive', label: 'Hive learning', icon: Sparkles },
+  { href: '/admin/hive-judge', label: 'Hive Judge', icon: Scale },
   { href: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },
   { href: '/admin/finance', label: 'Token economy', icon: Landmark },
   { href: '/admin/commissions', label: 'Commission', icon: Percent },
@@ -39,7 +43,7 @@ const active = (path: string, href: string) => (href === '/admin' ? path === '/a
 
 function Brand() {
   return (
-    <Link href="/admin" className="flex items-center gap-2 px-2" aria-label="StringMind admin">
+    <Link href="/admin" className="flex items-center gap-2 px-2" aria-label="Hive Mind admin">
       <LogoMark size={32} />
       <Wordmark className="text-lg leading-none" />
       <span className="rounded-md border border-gold/50 bg-gold/15 px-1.5 py-0.5 text-[10px] font-bold tracking-[0.15em] text-gold">ADMIN</span>
@@ -104,7 +108,7 @@ function Guarded({ children }: { children: ReactNode }) {
   useEffect(() => { if (!loading && !me && !unavailable) router.replace(`/sign-in?next=${encodeURIComponent(path)}`); }, [loading, me, unavailable, router, path]);
   useEffect(() => setDrawer(false), [path]);
 
-  if (unavailable) return <div className="flex min-h-screen items-center justify-center bg-ink-950 p-4"><div className="card max-w-md p-6 text-center"><p className="font-display text-lg font-semibold">Can&apos;t reach the StringMind API</p><p className="mt-2 text-sm text-fg-muted">The service is restarting or temporarily unavailable.</p><button onClick={refresh} className="mt-5 rounded-xl bg-gold-sheen px-4 py-2 text-sm font-semibold text-ink-950">Try again</button></div></div>;
+  if (unavailable) return <div className="flex min-h-screen items-center justify-center bg-ink-950 p-4"><div className="card max-w-md p-6 text-center"><p className="font-display text-lg font-semibold">Can&apos;t reach the Hive Mind API</p><p className="mt-2 text-sm text-fg-muted">The service is restarting or temporarily unavailable.</p><button onClick={refresh} className="mt-5 rounded-xl bg-gold-sheen px-4 py-2 text-sm font-semibold text-ink-950">Try again</button></div></div>;
   if (loading || !me) return <div className="flex min-h-screen items-center justify-center bg-ink-950"><Spinner /></div>;
   if (me.user.platformRole !== 'admin' && me.user.platformRole !== 'super_admin') {
     return (

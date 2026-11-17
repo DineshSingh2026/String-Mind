@@ -15,11 +15,11 @@ type Mode = 'prompt' | 'key' | null;
 
 const METHODS: { value: ConnectionMethod; label: string; hint: string }[] = [
   { value: 'api_key', label: 'Provider API key', hint: 'Call the provider API with your key (encrypted at rest).' },
-  { value: 'custom_rest', label: 'Custom REST', hint: 'StringMind POSTs messages to your HTTPS endpoint.' },
-  { value: 'webhook', label: 'Webhook', hint: 'StringMind sends signed webhooks; your agent replies via callback.' },
+  { value: 'custom_rest', label: 'Custom REST', hint: 'Hive Mind POSTs messages to your HTTPS endpoint.' },
+  { value: 'webhook', label: 'Webhook', hint: 'Hive Mind sends signed webhooks; your agent replies via callback.' },
   { value: 'a2a', label: 'A2A', hint: 'Agent-to-Agent protocol endpoint (agent card URL).' },
   { value: 'mcp', label: 'MCP', hint: 'Model Context Protocol server URL.' },
-  { value: 'sandbox', label: 'Sandbox', hint: 'Built-in StringMind sandbox agent, no credentials needed.' },
+  { value: 'sandbox', label: 'Sandbox', hint: 'Built-in Hive Mind sandbox agent, no credentials needed.' },
 ];
 
 function defaultMethod(p: Provider | undefined): ConnectionMethod {
@@ -161,7 +161,7 @@ export default function NewAgentPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <BackLink href="/app/agents">My agents</BackLink>
-      <PageHeader title="Connect an agent" description={mode === 'key' ? 'Bring any AI agent to StringMind. Credentials are encrypted and never shown again after you save them.' : 'Bring any AI agent to StringMind — choose how it connects.'} />
+      <PageHeader title="Connect an agent" description={mode === 'key' ? 'Bring any AI agent to Hive Mind. Credentials are encrypted and never shown again after you save them.' : 'Bring any AI agent to Hive Mind — choose how it connects.'} />
 
       <ol className="mb-6 flex gap-2 overflow-x-auto pb-1" aria-label="Progress">
         {progress.map((s, i) => (
@@ -221,7 +221,7 @@ export default function NewAgentPage() {
             <p className="mb-4 text-sm text-fg-muted">Pick the platform your agent runs on.</p>
             {provErr ? <ErrorState error={provErr} onRetry={() => reloadProv()} />
               : provLoading ? <div className="grid gap-3 sm:grid-cols-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
-              : providers.length === 0 ? <Alert tone="warning">No providers are enabled on this StringMind instance.</Alert>
+              : providers.length === 0 ? <Alert tone="warning">No providers are enabled on this Hive Mind instance.</Alert>
               : (
                 <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Provider">
                   {providers.map((p) => {
@@ -274,15 +274,15 @@ export default function NewAgentPage() {
           <div className="space-y-5">
             <h2 className="flex items-center gap-2 text-lg font-semibold"><KeyRound className="h-5 w-5 text-gold" />Credentials</h2>
             {method === 'sandbox' ? (
-              <Alert tone="info" title="No credentials needed">The sandbox agent runs inside StringMind — great for trying assessments and training flows.</Alert>
+              <Alert tone="info" title="No credentials needed">The sandbox agent runs inside Hive Mind — great for trying assessments and training flows.</Alert>
             ) : (
               <>
                 <Field label={needsUrl ? (method === 'a2a' ? 'Agent card / endpoint URL' : method === 'mcp' ? 'MCP server URL' : 'Endpoint URL') : 'Base URL (optional)'} htmlFor="url" required={needsUrl}
-                  hint={!needsUrl && provider.defaultBaseUrl ? `Defaults to ${provider.defaultBaseUrl}` : 'Must be reachable from the StringMind API server.'}>
+                  hint={!needsUrl && provider.defaultBaseUrl ? `Defaults to ${provider.defaultBaseUrl}` : 'Must be reachable from the Hive Mind API server.'}>
                   <Input id="url" type="url" inputMode="url" value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} placeholder={provider.defaultBaseUrl ?? 'https://'} />
                 </Field>
                 <Field label={needsKey ? 'API key' : method === 'webhook' ? 'Signing secret / auth token (optional)' : 'Auth token (optional)'} htmlFor="key" required={needsKey}
-                  hint="Encrypted at rest. StringMind only ever shows the last 4 characters after saving.">
+                  hint="Encrypted at rest. Hive Mind only ever shows the last 4 characters after saving.">
                   <div className="relative">
                     <Input id="key" type={showKey ? 'text' : 'password'} autoComplete="off" spellCheck={false} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={needsKey ? 'sk-…' : ''} className="pr-10 font-mono" />
                     <button type="button" onClick={() => setShowKey((s) => !s)} aria-label={showKey ? 'Hide key' : 'Show key while typing'} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-fg-subtle hover:text-fg">{showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
@@ -327,7 +327,7 @@ export default function NewAgentPage() {
             {test?.ok && (
               <div className="rounded-xl border border-gold/30 bg-gold/5 p-4">
                 <p className="font-medium">Next: run a capability assessment</p>
-                <p className="mt-1 text-sm text-fg-muted">StringMind tests your agent across domains with held-out benchmarks to produce verified scores.</p>
+                <p className="mt-1 text-sm text-fg-muted">Hive Mind tests your agent across domains with held-out benchmarks to produce verified scores.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {can('assessments.run') && <Button variant="primary" loading={assessing} onClick={assess} icon={<Gauge className="h-4 w-4" />}>Run capability assessment</Button>}
                   <Button variant="outline" href={`/app/agents/${agent.id}`}>Go to agent</Button>
@@ -373,7 +373,7 @@ function ModeChoice({ onPick }: { onPick: (m: 'prompt' | 'key') => void }) {
           className="group relative flex flex-col rounded-2xl border border-line p-5 text-left transition hover:border-ink-600 hover:bg-ink-850 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-electric/30 bg-electric/10 text-electric-soft"><KeyRound className="h-5 w-5" aria-hidden /></span>
           <span className="mt-4 font-display text-lg font-semibold">Connect with API key</span>
-          <span className="mt-1 text-sm text-fg-muted">Grok, OpenAI, Claude, Gemini… StringMind calls the model directly with your key, encrypted at rest.</span>
+          <span className="mt-1 text-sm text-fg-muted">Grok, OpenAI, Claude, Gemini… Hive Mind calls the model directly with your key, encrypted at rest.</span>
           <span className="mt-4 flex flex-wrap gap-1.5"><Badge tone="electric" icon={<Zap className="h-3 w-3" aria-hidden />}>Instant</Badge><Badge>Always-on</Badge></span>
           <span className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-medium text-fg-muted group-hover:text-fg">Choose provider <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden /></span>
         </button>

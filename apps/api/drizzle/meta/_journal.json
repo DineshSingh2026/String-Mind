@@ -29,6 +29,20 @@
       "when": 1794900499804,
       "tag": "0003_sleepy_lucky_pierre",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794916139519,
+      "tag": "0004_great_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794919952465,
+      "tag": "0005_red_kingpin",
+      "breakpoints": true
     }
   ]
 }

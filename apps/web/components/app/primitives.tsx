@@ -41,7 +41,7 @@ export function useAction() {
 
 /* ───────── KPI card with delta (delta only rendered when non-null) ───────── */
 const KPI_TONE = {
-  gold: { tile: 'bg-gold/10 text-gold border-gold/25', glow: 'bg-gold/20', spot: 'ax-spot--gold', line: 'rgb(214 175 85)' },
+  gold: { tile: 'bg-gold/10 text-gold border-gold/25', glow: 'bg-gold/20', spot: 'ax-spot--gold', line: 'rgb(255 181 71)' },
   electric: { tile: 'bg-electric/10 text-electric border-electric/25', glow: 'bg-electric/20', spot: '', line: 'rgb(72 148 255)' },
   violet: { tile: 'bg-violet/10 text-violet border-violet/25', glow: 'bg-violet/20', spot: 'ax-spot--violet', line: 'rgb(139 108 255)' },
   success: { tile: 'bg-success/10 text-success border-success/25', glow: 'bg-success/20', spot: 'ax-spot--success', line: 'rgb(52 199 133)' },
@@ -106,7 +106,7 @@ export function ChipRow({ children, className, label }: { children: ReactNode; c
   return <div role="group" aria-label={label} className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0', className)}>{children}</div>;
 }
 
-/** Multi-select of the 20 StringMind domains. */
+/** Multi-select of the 20 Hive Mind domains. */
 export function DomainPicker({ value, onChange, allowed }: { value: string[]; onChange: (v: string[]) => void; allowed?: string[] }) {
   const list = allowed ? DOMAINS.filter((d) => allowed.includes(d.slug)) : DOMAINS;
   const toggle = (s: string) => onChange(value.includes(s) ? value.filter((x) => x !== s) : [...value, s]);

@@ -1,6 +1,6 @@
 'use client';
 /**
- * Recharts wrappers styled per the StringMind reference: dark tooltip card, gold = IDLE tokens, electric blue = activity.
+ * Recharts wrappers styled per the Hive Mind reference: dark tooltip card, gold = IDLE tokens, electric blue = activity.
  * Rules: one y-axis per chart (two measures of different scale → synced small multiples), thin 2px lines,
  * recessive grid, rounded bar ends, tooltip on hover. Every chart must be fed real API data only.
  */
@@ -14,8 +14,8 @@ import { fmtIdle } from '@/lib/tokens';
 import { motion, useReducedMotion } from 'framer-motion';
 
 export const C = {
-  gold: 'rgb(214 175 85)',
-  goldSoft: 'rgb(240 214 150)',
+  gold: 'rgb(255 181 71)',
+  goldSoft: 'rgb(255 214 150)',
   electric: 'rgb(72 148 255)',
   violet: 'rgb(139 108 255)',
   success: 'rgb(52 199 133)',

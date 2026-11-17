@@ -1,5 +1,5 @@
 /**
- * Standard internal StringMind agent interface. Every provider is wrapped by an adapter
+ * Standard internal Hive Mind agent interface. Every provider is wrapped by an adapter
  * implementing `AgentRuntime`. Providers differ — adapters declare what they support
  * in `capabilities` and must never pretend to support something they don't.
  */
@@ -8,7 +8,7 @@ export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: s
 
 export interface InvokeRequest {
   messages: ChatMessage[];
-  /** extra system context injected by StringMind (instructions, retrieved knowledge, memories) */
+  /** extra system context injected by Hive Mind (instructions, retrieved knowledge, memories) */
   system?: string;
   maxTokens?: number;
   temperature?: number;
@@ -29,7 +29,7 @@ export interface AdapterCapabilities {
   tools: boolean;
   streaming: boolean;
   fineTuning: boolean;
-  /** true if StringMind can push persistent context (instructions/memory/RAG) into each call */
+  /** true if Hive Mind can push persistent context (instructions/memory/RAG) into each call */
   contextInjection: boolean;
 }
 

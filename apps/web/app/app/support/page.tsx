@@ -24,7 +24,7 @@ export default function SupportPage() {
   const valid = f.name.trim() && /\S+@\S+\.\S+/.test(f.email) && f.message.trim().length >= 10;
   return (
     <div className="space-y-6">
-      <PageHeader title="Support" description="Guides for every part of StringMind, and a direct line to our team." actions={<Button variant="outline" href="/docs" icon={<BookOpen className="h-4 w-4" />}>Documentation</Button>} />
+      <PageHeader title="Support" description="Guides for every part of Hive Mind, and a direct line to our team." actions={<Button variant="outline" href="/docs" icon={<BookOpen className="h-4 w-4" />}>Documentation</Button>} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {TOPICS.map(({ icon: Icon, ...t }) => (
           <Link key={t.title} href={t.href} className="card group flex gap-3 p-4 transition hover:border-ink-600">

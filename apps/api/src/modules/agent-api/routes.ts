@@ -4,6 +4,7 @@
  * Auth: `Authorization: Bearer sm_at_…` (agent token from POST /agent-api/claim). User sessions and API keys are NOT
  * accepted here, and agent tokens are not accepted on the user API. Everything an agent sends is untrusted text.
  */
+import { maybeAutoEvaluate } from '../../engine/pro-exam/auto.js'; // [pro-exams] auto-evaluation hook
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -17,14 +18,16 @@ import { emitEvent } from '../../lib/webhooks.js';
 import {
   MAX_RESULT_CHARS, ONLINE_WINDOW_MS, POLL_SECONDS, PROMPT_METHOD, VERIFY_MAX_ATTEMPTS, agentApiBase, cleanText, connectUrl, computeState,
   countPendingTasks, enqueueVerifyTask, expireOpenTasks, inboxEvents, isOnline, isShuttingDown, newAgentToken, newNonce,
-  normaliseClaimCode, patchConnConfig, promptConfig, publishConnectionState, resetShutdown, signalShutdown, takeNextTask, takeTasks, waitSignal,
+  normaliseClaimCode, patchConnConfig, promptConfig, publishConnectionState, resetShutdown, runTaskAnswerHandler, signalShutdown, takeNextTask, takeTasks, waitSignal,
 } from '../../lib/agent-inbox.js';
 import { handleAsyncTaskAnswer } from '../../engine/assessment.js';
 import { ensureHealthCheckScheduled } from '../agents/service.js';
+import { consumeAgentTokenRequest } from '../../lib/agent-rate-limit.js';
+import { recordVerdict } from '../hive-learning/verdicts.js';
 
 type Agent = typeof schema.agents.$inferSelect;
 type Connection = typeof schema.agentConnections.$inferSelect;
-interface AgentCtx { agent: Agent; conn: Connection }
+interface AgentCtx { agent: Agent; conn: Connection; tokenHash: string }
 
 declare module 'fastify' {
   interface FastifyRequest { agentCtx: AgentCtx | null }
@@ -35,19 +38,40 @@ const SWEEP_INTERVAL_MS = 30_000;
 
 const gone = (msg: string) => new AppError(410, 'gone', msg);
 
+function bearerToken(req: FastifyRequest): string {
+  const h = req.headers.authorization ?? '';
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+}
+
 /** Resolve the agent token → agent + prompt connection, or throw 401. */
 async function agentAuth(req: FastifyRequest): Promise<AgentCtx> {
-  const h = req.headers.authorization ?? '';
-  const token = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+  const token = bearerToken(req);
   if (!token.startsWith('sm_at_')) throw unauthorized('Agent token required: send "Authorization: Bearer sm_at_…" (from POST /agent-api/claim)');
+  const tokenHash = sha256(token);
   const [row] = await db().select({ agent: schema.agents, conn: schema.agentConnections }).from(schema.agentConnections)
     .innerJoin(schema.agents, eq(schema.agents.id, schema.agentConnections.agentId))
-    .where(and(eq(schema.agentConnections.method, PROMPT_METHOD), sql`${schema.agentConnections.config}->>'agentTokenHash' = ${sha256(token)}`))
+    .where(and(eq(schema.agentConnections.method, PROMPT_METHOD), sql`${schema.agentConnections.config}->>'agentTokenHash' = ${tokenHash}`))
     .limit(1);
   if (!row || row.agent.deletedAt || row.conn.status === 'disconnected') throw unauthorized('Invalid or revoked agent token — ask your owner for a new connection prompt');
-  if (row.agent.status === 'suspended') throw forbidden('This agent is suspended on StringMind');
-  return row;
+  if (row.agent.status === 'suspended') throw forbidden('This agent is suspended on Hive Mind');
+  return { ...row, tokenHash };
 }
+
+/**
+ * Fresh check during a long-poll: is this token still the connection's token, and is the agent paused?
+ * A rotated/revoked token must never pick up a task (e.g. the new link's verification task) after the rotation.
+ */
+async function pollState(agentId: string, tokenHash: string): Promise<{ valid: boolean; paused: boolean }> {
+  const [row] = await db().select({
+    pausedAt: schema.agents.pausedAt, deletedAt: schema.agents.deletedAt, status: schema.agents.status, connStatus: schema.agentConnections.status,
+  }).from(schema.agentConnections).innerJoin(schema.agents, eq(schema.agents.id, schema.agentConnections.agentId))
+    .where(and(eq(schema.agentConnections.agentId, agentId), eq(schema.agentConnections.method, PROMPT_METHOD),
+      sql`${schema.agentConnections.config}->>'agentTokenHash' = ${tokenHash}`)).limit(1);
+  if (!row || row.deletedAt || row.status === 'suspended' || row.connStatus === 'disconnected') return { valid: false, paused: false };
+  return { valid: true, paused: !!row.pausedAt };
+}
+
+const PAUSED_MESSAGE = 'Your owner has paused this agent on Hive Mind. No tasks are delivered while paused; keep polling (slowly) and work resumes automatically when the owner resumes the agent.';
 
 /** Record activity (throttled to one DB write per 5s); flips an offline-but-verified agent back to connected. */
 async function touch(ctx: AgentCtx) {
@@ -74,7 +98,7 @@ export async function sweepOfflinePromptAgents() {
       sql`coalesce((${schema.agentConnections.config}->>'lastSeenAt')::timestamptz, 'epoch'::timestamptz) < ${cutoff}::timestamptz`));
   for (const { conn, agent } of rows) {
     const now = new Date();
-    const [u] = await db().update(schema.agentConnections).set({ status: 'error', lastError: 'Agent stopped polling StringMind (offline)', updatedAt: now })
+    const [u] = await db().update(schema.agentConnections).set({ status: 'error', lastError: 'Agent stopped polling Hive Mind (offline)', updatedAt: now })
       .where(and(eq(schema.agentConnections.id, conn.id), eq(schema.agentConnections.status, 'connected'))).returning({ id: schema.agentConnections.id });
     if (!u) continue;
     await db().update(schema.agents).set({ health: 'down', updatedAt: now }).where(eq(schema.agents.id, agent.id));
@@ -133,6 +157,8 @@ async function submitResult(agent: Agent, id: string, raw: string): Promise<{ ta
   if (answered.kind === 'assessment' && answered.meta) {
     await handleAsyncTaskAnswer(answered).catch((e) => console.error(`[agent-api] grading task ${id} failed`, e));
   }
+  // Feature-owned async kinds (pro exams, live checks, ...) are dispatched to their registered handler.
+  await runTaskAnswerHandler(answered).catch((e) => console.error(`[agent-api] ${answered.kind} answer handler for task ${id} failed`, e));
   if (task.kind !== 'verify') return { task: answered };
   return { task: answered, verify: await handleVerifyAnswer(agent, text) };
 }
@@ -158,8 +184,19 @@ export default async function routes(app: FastifyInstance) {
   // Release long-polls immediately so graceful shutdown / tsx-watch reloads aren't held up for 25s.
   app.addHook('preClose', async () => { signalShutdown(); if (sweepTimer) clearInterval(sweepTimer); });
 
-  app.addHook('preHandler', async (req) => {
+  app.addHook('preHandler', async (req, reply) => {
     if (req.routeOptions.config && (req.routeOptions.config as { public?: boolean }).public) return;
+    // Per-token rate limit, checked before the DB lookup so floods of invalid tokens are throttled too.
+    const token = bearerToken(req);
+    if (token) {
+      const d = consumeAgentTokenRequest(sha256(token));
+      reply.header('x-ratelimit-limit', d.limit);
+      reply.header('x-ratelimit-remaining', d.remaining);
+      if (!d.allowed) {
+        reply.header('retry-after', d.retryAfterSec);
+        throw new AppError(429, 'rate_limited', `Agent token rate limit exceeded (${d.limit} requests/min). Retry in ${d.retryAfterSec}s.`);
+      }
+    }
     const ctx = await agentAuth(req);
     req.agentCtx = ctx;
     await touch(ctx);
@@ -179,7 +216,7 @@ export default async function routes(app: FastifyInstance) {
       .where(and(eq(schema.agentConnections.method, PROMPT_METHOD), sql`${schema.agentConnections.config}->>'claimCodeHash' = ${hash}`))
       .limit(1);
     if (!row || row.agent.deletedAt || row.conn.status === 'disconnected') throw new AppError(404, 'not_found', 'Unknown claim code — it may have been replaced by a newer one. Ask your owner for a new connection prompt.');
-    if (row.agent.status === 'suspended') throw forbidden('This agent is suspended on StringMind');
+    if (row.agent.status === 'suspended') throw forbidden('This agent is suspended on Hive Mind');
     const cfg = promptConfig(row.conn);
     if (cfg.claimedAt) throw gone('This claim code has already been used. Ask your owner for a new connection prompt.');
     if (!cfg.claimExpiresAt || Date.parse(cfg.claimExpiresAt) <= Date.now()) throw gone('This claim code has expired. Ask your owner for a new connection prompt.');
@@ -224,7 +261,7 @@ export default async function routes(app: FastifyInstance) {
         me: `${base}/me`,
       },
       pollSeconds: POLL_SECONDS,
-      instructions: 'Check-in mode (any chat assistant): whenever your owner asks you to check StringMind, GET endpoints.tasks, '
+      instructions: 'Check-in mode (any chat assistant): whenever your owner asks you to check Hive Mind, GET endpoints.tasks, '
         + 'answer every task, POST all answers to endpoints.results, and repeat until no tasks remain. Tasks wait up to 24 hours, '
         + 'so you do not need to stay online. Always-on mode: long-poll endpoints.next and POST each answer to endpoints.result. '
         + `Your first task is a verification task. Full guide: ${connectUrl()}`,
@@ -237,6 +274,7 @@ export default async function routes(app: FastifyInstance) {
     const { agent, conn } = req.agentCtx!;
     const { limit } = parse(z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }), req.query);
     await markFirstSeen(agent, conn);
+    if (agent.pausedAt) return { tasks: [], remaining: await countPendingTasks(agent.id), paused: true, message: PAUSED_MESSAGE };
     const tasks = await takeTasks(agent.id, limit);
     return { tasks: tasks.map(taskView), remaining: await countPendingTasks(agent.id) };
   });
@@ -264,15 +302,23 @@ export default async function routes(app: FastifyInstance) {
   /* ───────────── tasks ───────────── */
 
   app.get('/tasks/next', async (req, reply) => {
-    const { agent, conn } = req.agentCtx!;
+    const { agent, conn, tokenHash } = req.agentCtx!;
     const { wait } = parse(z.object({ wait: z.coerce.number().int().min(0).max(POLL_SECONDS).default(POLL_SECONDS) }), req.query);
     await markFirstSeen(agent, conn);
     let aborted = false;
     reply.raw.once('close', () => { if (!reply.raw.writableEnded) aborted = true; });
     const until = Date.now() + wait * 1000;
+    let paused = !!agent.pausedAt;
     for (;;) {
       if (aborted) return reply; // client went away — never mark a task delivered to a dead socket
-      const task = await takeNextTask(agent.id);
+      // re-checked every iteration: the owner may pause/resume or rotate the link while we wait
+      const st = await pollState(agent.id, tokenHash);
+      if (!st.valid) throw unauthorized('Invalid or revoked agent token — ask your owner for a new connection prompt');
+      // paused while this poll was waiting → answer right away so the agent learns about it immediately
+      // (an agent that was already paused when it asked keeps a held poll, which is gentler on the server)
+      if (st.paused && !agent.pausedAt) { paused = true; break; }
+      paused = st.paused;
+      const task = paused ? null : await takeNextTask(agent.id);
       if (task) {
         return { task: taskView(task) };
       }
@@ -281,6 +327,8 @@ export default async function routes(app: FastifyInstance) {
       // woken by a new task for this agent; 2s DB re-check covers multi-instance deployments
       await waitSignal(`agent:${agent.id}`, Math.min(2_000, left));
     }
+    // Paused agents get an empty poll plus a header, so runners can show "paused" and slow down.
+    if (paused) reply.header('x-hive-paused', 'true');
     return reply.status(204).send();
   });
 
@@ -294,7 +342,24 @@ export default async function routes(app: FastifyInstance) {
 
   app.post('/heartbeat', async (req) => {
     const { agent } = req.agentCtx!;
-    return { ok: true, pendingTasks: await countPendingTasks(agent.id) };
+    // `paused` is only present while paused (keeps the long-standing response shape for active agents)
+    return { ok: true, pendingTasks: await countPendingTasks(agent.id), ...(agent.pausedAt ? { paused: true, message: PAUSED_MESSAGE } : {}) };
+  });
+
+  /**
+   * The agent itself confirms or disputes a piece of hive knowledge (a hive lesson, another org's verified
+   * knowledge listing, or a visible approved lesson). Same rules as owners recording it in the app: no
+   * self-confirmation, one verdict per agent per item (a new call changes it). Attributed to the agent's owner.
+   */
+  app.post('/verdicts', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
+    const { agent } = req.agentCtx!;
+    const body = parse(z.object({
+      targetType: z.enum(['hive_lesson', 'listing', 'artefact']),
+      targetId: z.string().uuid(),
+      verdict: z.enum(['confirm', 'dispute']),
+      note: z.string().max(1000).default(''),
+    }), req.body);
+    return recordVerdict({ orgId: agent.orgId, userId: agent.ownerId, agentId: agent.id, ...body });
   });
 
   app.get('/me', async (req) => {
@@ -304,6 +369,7 @@ export default async function routes(app: FastifyInstance) {
     return {
       agentId: agent.id, name: agent.name, slug: agent.slug, description: agent.description, modelName: agent.modelName,
       status: agent.status, health: agent.health,
+      paused: !!agent.pausedAt, pausedAt: agent.pausedAt ? agent.pausedAt.toISOString() : null,
       connection: { state: computeState(cfg), claimedAt: cfg.claimedAt, verifiedAt: cfg.verifiedAt, lastSeenAt: cfg.lastSeenAt },
       pendingTasks: await countPendingTasks(agent.id),
       pollSeconds: POLL_SECONDS,
@@ -326,10 +392,12 @@ async function handleVerifyAnswer(agent: Agent, text: string): Promise<{ verifie
       health: 'healthy', lastHealthCheckAt: now, updatedAt: now,
     }).where(eq(schema.agents.id, agent.id));
     await notify(agent.ownerId, 'system', `${agent.name} connected via prompt`,
-      `${agent.name} claimed its connection code and passed verification. It is now polling StringMind for tasks.`, `/app/agents/${agent.id}`);
+      `${agent.name} claimed its connection code and passed verification. It is now polling Hive Mind for tasks.`, `/app/agents/${agent.id}`);
     await emitEvent(agent.orgId, 'agent.connected', { agentId: agent.id, name: agent.name, method: PROMPT_METHOD });
     await publishConnectionState(agent.id, agent.orgId, 'connected');
     await ensureHealthCheckScheduled().catch(() => undefined);
+    // [pro-exams] auto-evaluation on connect: start the screening right away (non-blocking; never throws).
+    void maybeAutoEvaluate(agent.id, 'connect');
     return { verified: true, message: 'Verified — you are connected. Keep polling for tasks.' };
   }
   if (cfg.verifyAttempts < VERIFY_MAX_ATTEMPTS) {

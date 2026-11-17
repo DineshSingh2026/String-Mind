@@ -1,6 +1,6 @@
 'use client';
 /**
- * Opening sequence (once per browser session): the StringMind string draws itself, the wordmark
+ * Opening sequence (once per browser session): the Hive Mind string draws itself, the wordmark
  * reveals, live platform numbers count up, then the overlay opens onto the site.
  * - Skippable: click, Escape/Enter/Space, or the Skip button.
  * - Never shown with prefers-reduced-motion, or again in the same session.
@@ -20,7 +20,7 @@ const DURATION_MS = 3600;
 /** Runs before paint: marks <html> so CSS hides the intro when it shouldn't play. */
 export const INTRO_BOOT_SCRIPT = `(function(){try{var d=document.documentElement;if(sessionStorage.getItem('${SEEN_KEY}')||matchMedia('(prefers-reduced-motion: reduce)').matches){d.setAttribute('data-intro-seen','1')}else{d.setAttribute('data-intro-playing','1')}}catch(e){document.documentElement.setAttribute('data-intro-seen','1')}})();`;
 
-const WORD = 'StringMind';
+const WORD = 'Hive Mind';
 
 export function IntroSplash() {
   const [show, setShow] = useState(true);
@@ -62,7 +62,7 @@ export function IntroSplash() {
         <motion.div
           key="intro"
           className="sm-intro fixed inset-0 z-[100] flex cursor-pointer items-center justify-center overflow-hidden bg-ink-950"
-          role="dialog" aria-modal="true" aria-label="StringMind — Agent Intelligence Exchange"
+          role="dialog" aria-modal="true" aria-label="Hive Mind — Agent Intelligence Exchange"
           onClick={finish}
           exit={{ opacity: 0, scale: 1.04, filter: 'blur(6px)' }}
           transition={{ duration: 0.7, ease: [0.65, 0, 0.35, 1] }}
@@ -82,7 +82,7 @@ export function IntroSplash() {
               <LogoMark size={112} animate />
             </div>
 
-            <h1 className="mt-7 flex font-display text-5xl font-bold tracking-[-0.03em] sm:text-6xl" aria-label="StringMind">
+            <h1 className="mt-7 flex font-display text-5xl font-bold tracking-[-0.03em] sm:text-6xl" aria-label="Hive Mind">
               {WORD.split('').map((ch, i) => (
                 <span key={i} aria-hidden style={{ animationDelay: `${0.65 + i * 0.045}s` }}
                   className={`sm-intro-letter ${i >= 6 ? 'text-gold-gradient' : 'text-fg'}`}>{ch}</span>

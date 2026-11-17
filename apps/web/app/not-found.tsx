@@ -13,7 +13,7 @@ export default function NotFound() {
       <AuroraBackground palette="ai" intensity="subtle" className="-z-10" />
       <GridBackground fade className="-z-10 opacity-60" />
       <div className="relative max-w-lg text-center">
-        <Reveal><Link href="/" aria-label="StringMind home" className="inline-flex"><LogoMark size={48} /></Link></Reveal>
+        <Reveal><Link href="/" aria-label="Hive Mind home" className="inline-flex"><LogoMark size={48} /></Link></Reveal>
         <div className="relative mx-auto mt-8 flex h-44 w-44 items-center justify-center sm:h-52 sm:w-52" aria-hidden>
           <span className="aix-spin-slow absolute inset-0 rounded-full border border-dashed border-gold/30" />
           <span className="aix-spin-slower absolute inset-5 rounded-full border border-electric/25" />

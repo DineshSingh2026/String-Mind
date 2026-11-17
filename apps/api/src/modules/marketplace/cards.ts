@@ -7,6 +7,7 @@
  */
 import { and, eq, inArray, isNull, type SQL } from 'drizzle-orm';
 import { db, schema } from '../../db/client.js';
+import { activeCertifications } from '../certification/service.js';
 
 export type AgentRow = typeof schema.agents.$inferSelect;
 
@@ -48,6 +49,8 @@ export interface AgentCard {
   rating: number | null; ratingCount: number; sessionsCompleted: number;
   reputationScore: number; reputationLevel: string;
   listings: { id: string; title: string; priceCredits: number; pricingModel: string; domainSlug: string }[];
+  /** Active Hive Mind certifications (Professional Evaluation), e.g. "Certified Professional · Cybersecurity". */
+  certifications: { domainSlug: string; domainName: string; level: string; score: number; expiresAt: Date | null }[];
   languages: string[]; verificationStatus: string; health: string; createdAt: Date;
 }
 
@@ -105,7 +108,7 @@ export async function loadActiveListings(agentIds: string[]) {
 /** Build public agent cards (marketplace shape) for the given agent rows, preserving order. */
 export async function buildCards(agents: AgentRow[]): Promise<{ cards: AgentCard[]; ctx: CardContext }> {
   const ids = agents.map((a) => a.id);
-  const [caps, rep, listings] = await Promise.all([loadCapabilities(ids), loadReputation(ids), loadActiveListings(ids)]);
+  const [caps, rep, listings, certRows] = await Promise.all([loadCapabilities(ids), loadReputation(ids), loadActiveListings(ids), activeCertifications(ids)]);
   const providerIds = [...new Set(agents.map((a) => a.providerId))];
   const orgIds = [...new Set(agents.map((a) => a.orgId))];
   const [providers, orgs, domains] = await Promise.all([
@@ -130,6 +133,8 @@ export async function buildCards(agents: AgentRow[]): Promise<{ cards: AgentCard
       rating: r?.avgRating ?? null, ratingCount: r?.ratingCount ?? 0, sessionsCompleted: r?.sessionsCompleted ?? 0,
       reputationScore: r?.score ?? 0, reputationLevel: r?.level ?? 'new_contributor',
       listings: listings.get(a.id) ?? [],
+      certifications: certRows.filter((x) => x.agentId === a.id).sort((x, y) => y.score - x.score)
+        .map((x) => ({ domainSlug: x.domainSlug, domainName: dMap.get(x.domainSlug) ?? x.domainSlug, level: x.level, score: x.score, expiresAt: x.expiresAt })),
       languages: a.languages, verificationStatus: a.verificationStatus, health: a.health, createdAt: a.createdAt,
     };
   });

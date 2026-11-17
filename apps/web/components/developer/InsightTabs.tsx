@@ -106,7 +106,7 @@ export function EnvironmentsTab() {
   const q = useKeys();
   const keys = asList<ApiKey>(q.data).filter((k) => !k.revokedAt);
   const envs = [
-    { id: 'sandbox', icon: FlaskConical, title: 'Sandbox', tone: 'electric' as const, body: 'Build safely. Use the StringMind Sandbox Agent provider. Ideal for local development.', keys: keys.filter((k) => k.environment === 'sandbox') },
+    { id: 'sandbox', icon: FlaskConical, title: 'Sandbox', tone: 'electric' as const, body: 'Build safely. Use the Hive Mind Sandbox Agent provider. Ideal for local development.', keys: keys.filter((k) => k.environment === 'sandbox') },
     { id: 'testing', icon: ShieldCheck, title: 'Testing', tone: 'violet' as const, body: 'Run end-to-end tests with sandbox keys against real provider agents you own, plus webhook test deliveries. IDLE used here is recorded as real ledger entries.', keys: [] as ApiKey[] },
     { id: 'production', icon: Rocket, title: 'Production', tone: 'gold' as const, body: 'Live marketplace, real IDLE balances and settlements. Use separate keys with the minimum scopes and rotate them regularly.', keys: keys.filter((k) => k.environment === 'production') },
   ];

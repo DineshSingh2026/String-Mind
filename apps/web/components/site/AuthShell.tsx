@@ -4,7 +4,7 @@ import { HeroEyebrow } from './pages/kit';
 import { AuthVisual } from './pages/AuthVisual';
 
 /** Split auth layout: form card + live network panel (panel collapses to a compact strip on mobile). */
-export function AuthShell({ title, subtitle, children, aside, eyebrow = 'StringMind account' }: { title: string; subtitle?: ReactNode; children: ReactNode; aside?: ReactNode; eyebrow?: string }) {
+export function AuthShell({ title, subtitle, children, aside, eyebrow = 'Hive Mind account' }: { title: string; subtitle?: ReactNode; children: ReactNode; aside?: ReactNode; eyebrow?: string }) {
   return (
     <div className="aix-grain relative isolate overflow-hidden">
       <AuroraBackground palette="mixed" intensity="subtle" className="-z-10" />

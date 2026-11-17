@@ -1,5 +1,5 @@
 /**
- * DORMANT — only reachable when FIAT_ENABLED=true (default false; StringMind is a pure IDLE Token economy, see
+ * DORMANT — only reachable when FIAT_ENABLED=true (default false; Hive Mind is a pure IDLE Token economy, see
  * docs/IDLE_TOKENS.md). Kept for a possible future.
  *
  * Payment providers + payment lifecycle (token purchases).
@@ -185,7 +185,7 @@ export async function createPayment({ orgId, userId, packageId }: { orgId: strin
   }).returning();
   let checkout: CheckoutResult;
   try {
-    checkout = await provider.createCheckout({ ...payment!, description: `${pkg.name} — ${pkg.credits + pkg.bonusCredits} StringMind credits` });
+    checkout = await provider.createCheckout({ ...payment!, description: `${pkg.name} — ${pkg.credits + pkg.bonusCredits} Hive Mind credits` });
   } catch (e) {
     await db().update(schema.payments).set({ status: 'failed', failureReason: (e as Error).message, updatedAt: new Date() }).where(eq(schema.payments.id, payment!.id));
     throw e;
@@ -252,9 +252,9 @@ export async function buildInvoice(p: Payment) {
   const half = Math.floor(p.taxMinor / 2);
   return {
     number: p.invoiceNumber, paymentId: p.id, issuedAt: p.updatedAt.toISOString(), status: p.status, currency: p.currency,
-    seller: { name: 'StringMind Platform', gstin: 'ILLUSTRATIVE-NOT-REGISTERED' },
+    seller: { name: 'Hive Mind Platform', gstin: 'ILLUSTRATIVE-NOT-REGISTERED' },
     buyer: { orgId: p.orgId, name: org?.name ?? '' },
-    lines: [{ description: `${pkg?.name ?? 'Credit package'} — ${p.credits} StringMind credits`, quantity: 1, unitMinor: p.amountMinor, amountMinor: p.amountMinor }],
+    lines: [{ description: `${pkg?.name ?? 'Credit package'} — ${p.credits} Hive Mind credits`, quantity: 1, unitMinor: p.amountMinor, amountMinor: p.amountMinor }],
     subtotalMinor: p.amountMinor,
     tax: { type: 'GST', rateBps: GST_RATE_BPS, amountMinor: p.taxMinor, breakdown: [{ name: 'CGST 9%', amountMinor: half }, { name: 'SGST 9%', amountMinor: p.taxMinor - half }] },
     totalMinor: total(p), credits: p.credits,

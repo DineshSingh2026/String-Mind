@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Activity, Bot, Gauge, LayoutGrid, List, Plug, Plus, RefreshCw } from 'lucide-react';
+import { Activity, Bot, Gauge, LayoutGrid, List, Pause, Plug, Plus, RefreshCw } from 'lucide-react';
 import { Avatar, Badge, Button, EmptyState, ErrorState, PageHeader, ScoreRing, Table, Td, cn, fmtRelative } from '@/components/ui';
 import { api, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -10,7 +10,10 @@ import { GridSkeleton, StatusPill, reputationName, titleCase, useAction } from '
 import { listOf, reputationLevel, type Agent, type Paged } from '@/components/app/types';
 import { PromptStatusBadge, isPromptAgent } from '@/components/app/PromptConnect';
 
-const AgentStatus = ({ a }: { a: Agent }) => (isPromptAgent(a) && a.status !== 'suspended' ? <PromptStatusBadge agentId={a.id} /> : <StatusPill status={a.status} />);
+const AgentStatus = ({ a }: { a: Agent }) => (<>
+  {isPromptAgent(a) && a.status !== 'suspended' ? <PromptStatusBadge agentId={a.id} /> : <StatusPill status={a.status} />}
+  {(a as Agent & { pausedAt?: string | null }).pausedAt && <Badge tone="warning" icon={<Pause className="h-3 w-3" aria-hidden />}>Paused</Badge>}
+</>);
 
 function HealthDot({ health }: { health: string | null | undefined }) {
   const h = health ?? 'unknown';
@@ -47,7 +50,7 @@ export default function AgentsPage() {
         : isLoading ? <GridSkeleton />
         : agents.length === 0 ? (
           <EmptyState icon={<Bot className="h-6 w-6" />} title="No agents connected yet"
-            description="Connect an agent from xAI Grok, OpenAI, Anthropic, Gemini, a custom REST endpoint, webhook, A2A or MCP server — or start with the StringMind sandbox agent. Then run an independent capability assessment."
+            description="Connect an agent from xAI Grok, OpenAI, Anthropic, Gemini, a custom REST endpoint, webhook, A2A or MCP server — or start with the Hive Mind sandbox agent. Then run an independent capability assessment."
             action={can('agents.create') ? <Button variant="primary" href="/app/agents/new" icon={<Plug className="h-4 w-4" />}>Connect your first agent</Button> : <p className="text-xs text-fg-subtle">Ask an organisation admin to connect an agent.</p>} />
         ) : view === 'grid' ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -85,7 +88,7 @@ export default function AgentsPage() {
               {agents.map((a) => (
                 <tr key={a.id}>
                   <Td><div className="flex items-center gap-2.5"><Avatar name={a.name} src={a.avatarUrl} size={32} /><div className="min-w-0"><Link href={`/app/agents/${a.id}`} className="font-medium hover:underline">{a.name}</Link><p className="text-xs text-fg-subtle">{a.provider?.name} · {a.modelName}</p></div></div></Td>
-                  <Td><AgentStatus a={a} /></Td>
+                  <Td><div className="flex flex-wrap items-center gap-1.5"><AgentStatus a={a} /></div></Td>
                   <Td><HealthDot health={a.health} /></Td>
                   <Td className="text-xs text-fg-muted">{titleCase(a.connection?.method)} · {titleCase(a.connection?.status)}</Td>
                   <Td><ScoreRing score={a.overallScore} size={36} /></Td>

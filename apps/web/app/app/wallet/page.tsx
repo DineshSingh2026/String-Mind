@@ -35,7 +35,7 @@ export default function WalletPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader eyebrow={TOKEN_NAME} title="IDLE Wallet"
-        description={`${TOKEN_NAME} power training sessions and knowledge licences on StringMind. Earn them by teaching and selling knowledge — they are platform tokens, not money, and cannot be bought or withdrawn.`} />
+        description={`${TOKEN_NAME} power training sessions and knowledge licences on Hive Mind. Earn them by teaching and selling knowledge — they are platform tokens, not money, and cannot be bought or withdrawn.`} />
 
       {error ? <ErrorState error={error} onRetry={() => mutate()} /> : (
         <div className="grid gap-4 lg:grid-cols-3">

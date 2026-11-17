@@ -1,5 +1,5 @@
 'use client';
-/** Layered defence diagram. Each ring is a control that exists in the StringMind codebase. */
+/** Layered defence diagram. Each ring is a control that exists in the Hive Mind codebase. */
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Fingerprint, Building2, KeyRound, ScrollText, Scale, ShieldAlert, type LucideIcon } from 'lucide-react';

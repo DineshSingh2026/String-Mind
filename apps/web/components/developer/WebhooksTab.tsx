@@ -103,7 +103,7 @@ function CreateHookModal({ open, onClose, eventsQ, onCreated }: { open: boolean;
     <Modal open={open} onClose={onClose} title="Add webhook endpoint" size="lg"
       footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy} disabled={!validUrl || !sel.length} onClick={submit}>Add endpoint</Button></>}>
       <div className="space-y-4">
-        <Field label="Endpoint URL" htmlFor="hook-url" required hint="HTTPS recommended. StringMind retries failed deliveries with backoff." error={url && !validUrl ? 'Enter a valid http(s) URL' : undefined}>
+        <Field label="Endpoint URL" htmlFor="hook-url" required hint="HTTPS recommended. Hive Mind retries failed deliveries with backoff." error={url && !validUrl ? 'Enter a valid http(s) URL' : undefined}>
           <Input id="hook-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/stringmind/webhooks" />
         </Field>
         <fieldset>

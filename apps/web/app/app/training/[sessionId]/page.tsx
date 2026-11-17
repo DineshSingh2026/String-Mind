@@ -1,22 +1,25 @@
 'use client';
 import Link from 'next/link';
+import { KnowledgeFlow } from '@/components/fx/HiveAnimations';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Clock, Flag, Lock, Pause, Play, Send, Square, Star, Target, Wifi, WifiOff, MessagesSquare } from 'lucide-react';
+import { ArrowLeft, Clock, Eye, Flag, Globe2, Lock, Pause, Play, Send, Square, Star, Target, Wifi, WifiOff, MessagesSquare } from 'lucide-react';
+import { FollowButton } from '@/components/social/FollowButton';
 import {
-  Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, Skeleton, Spinner, Tabs, cn, fmtDateTime, useToast,
+  Alert, Avatar, Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, Skeleton, Spinner, Tabs, cn, fmtDateTime, useToast,
 } from '@/components/ui';
 import { api, errorMessage, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useRealtime } from '@/lib/realtime';
 import { ConfirmModal } from '@/components/training/ConfirmModal';
-import { AnimatePresence, TypingDots, motion, useReducedMotion } from '@/components/app/motion';
-import { MessageBubble, ParticipantCard, StatusPill } from '@/components/training/parts';
+import { AnimatePresence, motion, useReducedMotion } from '@/components/app/motion';
+import { MessageBubble, ParticipantCard, StatusPill, senderSeed } from '@/components/training/parts';
+import { agentColor } from '@/components/brand/hex';
 import {
   ArtefactsPanel, DisputeModal, EvaluationPanel, ExercisesPanel, ProgressPanel, ResourcesPanel, ReviewModal, SettlementPanel,
 } from '@/components/training/RoomPanels';
 import {
-  type TrainingMessage, type TrainingSession, LIVE_STATUSES, STAGE_LABELS, agentName, asList, domainName, elapsedSeconds, fmtDuration, objectivesOf, sideAgent,
+  type TrainingMessage, type TrainingSession, LIVE_STATUSES, STAGE_LABELS, agentName, asList, domainName, elapsedSeconds, fmtDuration, fmtTimeShort, objectivesOf, sideAgent,
 } from '@/components/training/model';
 
 type MobileTab = 'conversation' | 'progress' | 'details';
@@ -116,6 +119,20 @@ export default function TrainingRoomPage() {
   };
   const quick = (action: 'pause' | 'resume', msg: string) => { control(action, msg).catch((e) => toast('danger', errorMessage(e))); };
 
+  /* public room visibility (social module): either participant side with training.participate may toggle */
+  const visibility = (s as TrainingSession & { visibility?: string }).visibility === 'public' ? 'public' : 'private';
+  const moderationRemoved = (s as TrainingSession & { moderation?: string }).moderation === 'removed';
+  const canToggleVisibility = canParticipate && (isLearnerSide || isTrainerSide);
+  const toggleVisibility = async () => {
+    const next = visibility === 'public' ? 'private' : 'public';
+    setCtlBusy('visibility');
+    try {
+      await api.patch(`/social/rooms/${s.id}/visibility`, { visibility: next });
+      toast('success', next === 'public' ? 'Room is now public — anyone can watch the transcript' : 'Room is private again');
+      await sessionQ.mutate((cur) => (cur ? { ...cur, visibility: next } as TrainingSession : cur), { revalidate: true });
+    } catch (e) { toast('danger', errorMessage(e)); } finally { setCtlBusy(null); }
+  };
+
   const objectives = objectivesOf(s);
   const done = s.status === 'completed';
   const canDispute = ['completed', 'failed'].includes(s.status) && (isLearnerSide || isTrainerSide);
@@ -133,7 +150,7 @@ export default function TrainingRoomPage() {
         {done && <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-gold/10 blur-3xl" aria-hidden />}
         <div className="relative min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-semibold sm:text-2xl">Live Training Session</h1>
+            <h1 className="text-xl font-semibold sm:text-2xl">Training Room</h1>
             <StatusPill status={s.status} />
             <span className={cn('inline-flex items-center gap-1.5 rounded-full border bg-ink-950/60 px-2.5 py-1 font-mono text-sm tabular-nums', s.status === 'active' ? 'border-success/30 text-fg' : 'border-line')} aria-label="Elapsed time">
               <Clock className="h-3.5 w-3.5 text-fg-subtle" />{fmtDuration(elapsedSeconds(s, now))}
@@ -143,8 +160,23 @@ export default function TrainingRoomPage() {
             </span>
           </div>
           <p className="mt-1 truncate text-sm text-fg-muted">{s.subject ?? domainName(s) ?? 'Training'}{domainName(s) && s.subject ? ` · ${domainName(s)}` : ''}</p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
+            {visibility === 'public'
+              ? <><span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-success-soft"><Globe2 className="h-3 w-3" />Public room</span>{!moderationRemoved && <Link href={`/rooms/${s.id}`} className="inline-flex items-center gap-1 hover:text-fg"><Eye className="h-3 w-3" />Open public view</Link>}</>
+              : <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5"><Lock className="h-3 w-3" />Private room · participants only</span>}
+            {moderationRemoved && <span className="text-danger-soft">Removed from public view by Hive Mind moderation</span>}
+          </p>
         </div>
-        <div className="relative flex flex-wrap gap-2">
+        <div className="relative flex flex-wrap items-start gap-2">
+          <FollowButton targetType="session" targetId={s.id} />
+          {canToggleVisibility && (
+            <Button variant="outline" loading={ctlBusy === 'visibility'} disabled={visibility === 'private' && moderationRemoved}
+              icon={visibility === 'public' ? <Lock className="h-4 w-4" /> : <Globe2 className="h-4 w-4" />}
+              title={visibility === 'public' ? 'Hide this room from the public again' : 'Let anyone watch this room read-only (flagged content stays withheld)'}
+              onClick={() => void toggleVisibility()}>
+              {visibility === 'public' ? 'Make private' : 'Make public'}
+            </Button>
+          )}
           {canParticipate && s.status === 'scheduled' && <Button variant="ai" icon={<Play className="h-4 w-4" />} loading={ctlBusy === 'start'} onClick={() => setConfirm('start')}>Start</Button>}
           {canParticipate && s.status === 'active' && <Button variant="outline" icon={<Pause className="h-4 w-4" />} loading={ctlBusy === 'pause'} onClick={() => quick('pause', 'Session paused')}>Pause</Button>}
           {canParticipate && s.status === 'paused' && <Button variant="ai" icon={<Play className="h-4 w-4" />} loading={ctlBusy === 'resume'} onClick={() => quick('resume', 'Session resumed')}>Resume</Button>}
@@ -155,8 +187,12 @@ export default function TrainingRoomPage() {
       </div>
 
       {s.status === 'failed' && <div className="mb-4"><Alert tone="danger" title="Session failed">{s.failureReason ?? 'The orchestration could not complete. Settlement follows the refund policy.'}</Alert></div>}
-      {s.status === 'disputed' && <div className="mb-4"><Alert tone="warning" title="Under dispute">Settlement is frozen until an StringMind administrator resolves the dispute.</Alert></div>}
+      {s.status === 'disputed' && <div className="mb-4"><Alert tone="warning" title="Under dispute">Settlement is frozen until an Hive Mind administrator resolves the dispute.</Alert></div>}
 
+      {trainer && learner && (
+        <KnowledgeFlow trainer={{ id: trainer.id, name: agentName(trainer) }} learner={{ id: learner.id, name: agentName(learner) }}
+          active={s.status === 'active'} stage={(STAGE_LABELS as Record<string, string>)[s.stage ?? '']} />
+      )}
       <Tabs<MobileTab> className="mb-4 lg:hidden" value={mobileTab} onChange={setMobileTab} tabs={[
         { value: 'conversation', label: 'Conversation', count: messages.length },
         { value: 'progress', label: 'Progress' },
@@ -214,7 +250,7 @@ export default function TrainingRoomPage() {
       </div>
 
       <ConfirmModal open={confirm === 'start'} onClose={() => setConfirm(null)} tone="ai" confirmLabel="Start session" title="Start this training session?"
-        description="StringMind orchestrates the five stages automatically: introduction → knowledge sharing → practical exercises → independent evaluation → completion."
+        description="Hive Mind orchestrates the five stages automatically: introduction → knowledge sharing → practical exercises → independent evaluation → completion."
         onConfirm={() => control('start', 'Session started')} />
       <ConfirmModal open={confirm === 'end'} onClose={() => setConfirm(null)} confirmLabel="End session" title="End this session now?"
         onConfirm={() => control('end', 'Session ended')}>
@@ -262,6 +298,27 @@ function Transcript({ q, messages, learner, trainer, sessionId, block, onSent, s
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
 
+  /* conversation timeline: one stop per stage, in the order the stages happened */
+  const timeline = useMemo(() => {
+    const stops: { stage: string; first: TrainingMessage; count: number }[] = [];
+    for (const m of messages) {
+      const key = m.stage ?? 'other';
+      const cur = stops.find((x) => x.stage === key);
+      if (cur) cur.count++; else stops.push({ stage: key, first: m, count: 1 });
+    }
+    return stops;
+  }, [messages]);
+  const jumpTo = (id: string) => {
+    stick.current = false;
+    document.getElementById(`msg-${id}`)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  /* who is probably speaking next: the agent that did not send the last agent message */
+  const lastAgentMsg = [...messages].reverse().find((m) => m.senderRole === 'trainer' || m.senderRole === 'learner');
+  const nextSide = lastAgentMsg?.senderRole === 'trainer' ? 'learner' : 'trainer';
+  const nextAgent = nextSide === 'trainer' ? trainer : learner;
+  const nextColor = agentColor(nextAgent?.id ?? agentName(nextAgent));
+
   useEffect(() => {
     const el = scroller.current;
     if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
@@ -284,6 +341,24 @@ function Transcript({ q, messages, learner, trainer, sessionId, block, onSent, s
     <Card className="relative flex h-[70vh] flex-col overflow-hidden lg:h-[calc(100vh-13rem)] lg:min-h-[520px]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgb(var(--electric)/0.06),transparent_60%)]" aria-hidden />
       <CardHeader className="relative" title="Conversation" subtitle={`${messages.length} message${messages.length === 1 ? '' : 's'} · transcript is recorded`} />
+      {timeline.length > 0 && (
+        <nav aria-label="Conversation timeline" className="relative border-b border-line/50 px-4 pb-3">
+          <ol className="flex items-center gap-1 overflow-x-auto pb-0.5">
+            {timeline.map((t, i) => (
+              <li key={t.stage} className="flex shrink-0 items-center gap-1">
+                {i > 0 && <span aria-hidden className="h-px w-4 bg-gradient-to-r from-line to-fg-subtle/40" />}
+                <button type="button" onClick={() => jumpTo(t.first.id)}
+                  className="group flex items-center gap-1.5 rounded-full border border-line/70 bg-ink-950/50 px-2.5 py-1 text-[11px] text-fg-muted transition hover:border-violet/50 hover:text-fg"
+                  title={`Jump to ${(STAGE_LABELS as Record<string, string>)[t.stage] ?? t.stage}`}>
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-hive-sheen" />
+                  <span className="font-medium">{(STAGE_LABELS as Record<string, string>)[t.stage] ?? t.stage.replace(/_/g, ' ')}</span>
+                  <span className="tabular-nums text-fg-subtle">{t.count} · {fmtTimeShort(t.first.createdAt)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
       <div ref={scroller} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
         className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite" aria-relevant="additions">
         {q.isLoading ? <div className="flex h-full items-center justify-center"><Spinner /></div>
@@ -292,7 +367,7 @@ function Transcript({ q, messages, learner, trainer, sessionId, block, onSent, s
               : (
                 <AnimatePresence initial={false}>
                   {messages.map((m) => (
-                    <motion.div key={m.id} layout={reduce ? false : 'position'} initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                    <motion.div key={m.id} id={`msg-${m.id}`} className="scroll-mt-4" layout={reduce ? false : 'position'} initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ type: 'spring', stiffness: 380, damping: 32 }}>
                       <MessageBubble m={m} learner={learner} trainer={trainer} />
                     </motion.div>
@@ -300,10 +375,11 @@ function Transcript({ q, messages, learner, trainer, sessionId, block, onSent, s
                 </AnimatePresence>
               )}
         {streaming && !q.isLoading && !q.error && (
-          <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2.5" role="status" aria-label={`${streaming} in progress`}>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-electric"><MessagesSquare className="h-4 w-4" aria-hidden /></div>
-            <div className="flex items-center gap-2 rounded-2xl border border-electric/25 bg-electric/[0.06] px-3.5 py-2.5 text-xs text-fg-muted">
-              <TypingDots className="text-electric" /><span>{streaming} in progress — agents are exchanging messages</span>
+          <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('flex items-center gap-2.5', nextSide === 'learner' && 'flex-row-reverse')} role="status" aria-label={`${agentName(nextAgent)} is typing`}>
+            <Avatar name={agentName(nextAgent)} seed={nextAgent?.id} src={nextAgent?.avatar} size={32} />
+            <div className="bubble bubble--agent flex items-center gap-2 !py-2.5 text-xs text-fg-muted" style={{ '--agent': nextColor.solid } as React.CSSProperties}>
+              <span className="typing-dots" style={{ color: nextColor.solid }}><span /><span /><span /></span>
+              <span><span className="font-medium" style={{ color: nextColor.text }}>{agentName(nextAgent)}</span> is typing · {streaming}</span>
             </div>
           </motion.div>
         )}

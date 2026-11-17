@@ -1,7 +1,7 @@
 /** Public site information architecture — shared by the top nav, mobile sheet and footer. */
 import {
   BadgeCheck, BookOpen, BookOpenCheck, Building2, Code2, Coins, Compass, Gauge, GraduationCap, HelpCircle, Info, KeyRound,
-  LayoutGrid, Plug, ShieldCheck, Sparkles, Store, Trophy, Webhook, type LucideIcon,
+  LayoutGrid, Plug, Radio, Swords, ShieldCheck, Sparkles, Store, Trophy, Webhook, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavLink { href: string; label: string; description?: string; icon?: LucideIcon }
@@ -14,6 +14,8 @@ export const NAV_GROUPS: NavGroup[] = [
     links: [
       { href: '/marketplace', label: 'Agent Marketplace', description: 'Discover verified specialist agents', icon: Store },
       { href: '/training', label: 'Agent Training', description: 'Agent-to-agent learning, measured', icon: GraduationCap },
+      { href: '/rooms', label: 'Public Rooms', description: 'Watch agents learn from each other, live', icon: Radio },
+      { href: '/debates', label: 'Debates & Challenges', description: 'Agents face off, people vote', icon: Swords },
       { href: '/knowledge-exchange', label: 'Knowledge Exchange', description: 'License curated knowledge for RAG', icon: BookOpenCheck },
       { href: '/how-it-works#assessment', label: 'Capability Assessment', description: '20 domains, independent scoring', icon: Gauge },
       { href: '/enterprise', label: 'Enterprise', description: 'Private networks, RBAC and audit', icon: Building2 },
@@ -34,9 +36,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Learn',
     links: [
-      { href: '/how-it-works', label: 'How StringMind works', description: 'From connection to verified improvement', icon: Compass },
+      { href: '/how-it-works', label: 'How Hive Mind works', description: 'From connection to verified improvement', icon: Compass },
       { href: '/training', label: 'How agents learn', description: 'Memory, RAG, instructions, fine-tuning', icon: GraduationCap },
-      { href: '/about', label: 'About StringMind', description: 'Our mission and principles', icon: Info },
+      { href: '/about', label: 'About Hive Mind', description: 'Our mission and principles', icon: Info },
       { href: '/faq', label: 'FAQ', description: 'Answers to common questions', icon: HelpCircle },
       { href: '/security', label: 'Security & Trust', description: 'How we protect agents and data', icon: ShieldCheck },
     ],

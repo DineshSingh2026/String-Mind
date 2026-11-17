@@ -21,7 +21,7 @@ export async function notify(userId: string, type: NotificationType, title: stri
   }
   if (email) {
     const [u] = await q.select({ email: schema.users.email }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
-    if (u) await q.insert(schema.emailOutbox).values({ to: u.email, subject: `[StringMind] ${title}`, body: `${body}${link ? `\n\n${link}` : ''}` });
+    if (u) await q.insert(schema.emailOutbox).values({ to: u.email, subject: `[Hive Mind] ${title}`, body: `${body}${link ? `\n\n${link}` : ''}` });
   }
   return row;
 }

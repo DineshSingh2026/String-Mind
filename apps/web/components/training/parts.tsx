@@ -1,6 +1,8 @@
 'use client';
 import { ShieldAlert, Bot, Crown, Gavel, Info } from 'lucide-react';
 import { Avatar, Badge, cn, fmtDateTime } from '@/components/ui';
+import { LogoMark } from '@/components/brand/Logo';
+import { agentColor } from '@/components/brand/hex';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   type AgentRef, type TrainingMessage, agentName, flagReasonLabel, isBlocked, orgName, providerName, senderLabel, statusMeta,
@@ -47,7 +49,7 @@ export function ParticipantCard({ agent, role, subtitle }: { agent: AgentRef | n
   return (
     <div className={cn('card ax-spot ax-lift flex items-start gap-3 p-4', role === 'Trainer' && 'ax-spot--gold')}>
       <div className={cn('rounded-full p-[2px] shadow-[0_0_18px_-4px_var(--tw-shadow-color)]', role === 'Trainer' ? 'bg-gold-sheen shadow-gold/60' : 'bg-ai-sheen shadow-electric/60')}>
-        <Avatar name={name} src={agent?.avatar} size={44} className="rounded-full border-2 border-ink-900" />
+        <Avatar name={name} seed={agent?.id} src={agent?.avatar} size={44} className="rounded-full border-2 border-ink-900" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{name} <span className="text-fg-muted">({role})</span></p>
@@ -69,6 +71,15 @@ const ROLE_STYLE: Record<string, { bubble: string; icon: React.ReactNode; tag: s
   system: { bubble: 'border-line bg-ink-800/60', icon: <Info className="h-3 w-3" />, tag: 'System', align: 'center' },
 };
 
+/** Stable colour key for whoever sent a message (agent id when known). */
+export function senderSeed(m: TrainingMessage, learner: AgentRef | null, trainer: AgentRef | null): string {
+  const ref = m.senderRole === 'trainer' ? trainer : m.senderRole === 'learner' ? learner : null;
+  return m.senderAgentId ?? ref?.id ?? senderLabel(m, learner, trainer);
+}
+
+/** Platform voice: system notices and the independent evaluator speak as the Hive. */
+const isHive = (role: string) => role === 'system' || role === 'evaluator';
+
 export function MessageBubble({ m, learner, trainer }: { m: TrainingMessage; learner: AgentRef | null; trainer: AgentRef | null }) {
   const st = ROLE_STYLE[m.senderRole] ?? ROLE_STYLE.system!;
   const name = senderLabel(m, learner, trainer);
@@ -76,32 +87,42 @@ export function MessageBubble({ m, learner, trainer }: { m: TrainingMessage; lea
   if (st.align === 'center' && !m.flagged) {
     return (
       <div className="flex justify-center">
-        <div className="max-w-[85%] rounded-full border border-line bg-ink-800/60 px-3 py-1 text-center text-xs text-fg-muted">
-          {m.content} <span className="ml-1 text-fg-subtle">· {fmtDateTime(m.createdAt)}</span>
+        <div className="bubble--system inline-flex items-center gap-1.5">
+          <LogoMark size={14} /><span><span className="font-medium text-fg-muted">Hive</span> · {m.content}</span> <span className="text-fg-subtle">· {fmtDateTime(m.createdAt)}</span>
         </div>
       </div>
     );
   }
   const right = st.align === 'right';
+  const isAgent = m.senderRole === 'trainer' || m.senderRole === 'learner';
+  const hive = isHive(m.senderRole);
+  const seed = senderSeed(m, learner, trainer);
+  const color = isAgent ? agentColor(seed) : null;
+  const ref = m.senderRole === 'trainer' ? trainer : m.senderRole === 'learner' ? learner : null;
   return (
     <div className={cn('flex gap-2.5', right && 'flex-row-reverse')}>
-      {m.senderRole === 'trainer' || m.senderRole === 'learner'
-        ? <Avatar name={name} size={32} className="rounded-full" />
-        : <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-fg-muted"><Bot className="h-4 w-4" /></div>}
+      {isAgent
+        ? <Avatar name={name} seed={seed} src={ref?.avatar} size={32} />
+        : hive
+          ? <span className="flex h-8 w-8 shrink-0 items-center justify-center"><LogoMark size={30} /></span>
+          : <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-fg-muted"><Bot className="h-4 w-4" /></div>}
       <div className={cn('min-w-0 max-w-[82%]', right && 'items-end text-right')}>
         <div className={cn('mb-1 flex flex-wrap items-center gap-1.5 text-xs', right && 'justify-end')}>
-          <span className="font-medium text-fg">{name}</span>
+          <span className={cn('font-medium', hive ? 'text-hive-gradient' : 'text-fg')} style={color ? { color: color.text } : undefined}>{hive ? 'The Hive' : name}</span>
           <Badge tone={m.senderRole === 'trainer' ? 'gold' : m.senderRole === 'learner' ? 'electric' : m.senderRole === 'owner' ? 'violet' : m.senderRole === 'evaluator' ? 'success' : 'neutral'} icon={st.icon}>{st.tag}</Badge>
           <span className="text-fg-subtle">{fmtDateTime(m.createdAt)}</span>
         </div>
-        <div className={cn('rounded-2xl border px-3.5 py-2.5 text-left text-sm leading-relaxed', st.bubble, m.flagged && 'border-warning/40')}>
+        <div
+          className={cn('bubble text-left', isAgent ? cn('bubble--agent', right && 'bubble--right') : hive ? 'bubble--hive' : 'bubble--host', m.flagged && '!border-warning/50')}
+          style={color ? ({ '--agent': color.solid } as React.CSSProperties) : undefined}
+        >
           {m.flagged && (
             <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-warning">
               <ShieldAlert className="h-3.5 w-3.5" aria-hidden />{flagReasonLabel(m.flagReason)}
             </div>
           )}
           {blocked
-            ? <p className="italic text-fg-subtle">Content withheld by the StringMind safety filter.</p>
+            ? <p className="italic text-fg-subtle">Content withheld by the Hive Mind safety filter.</p>
             : <p className="whitespace-pre-wrap break-words text-fg">{m.content}</p>}
         </div>
       </div>

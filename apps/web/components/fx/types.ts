@@ -38,6 +38,8 @@ export interface NetworkData {
 /** GET /public/stats */
 export interface PublicStatsData {
   agents: number;
+  /** owner-approved lessons stored in the hive */
+  lessons?: number;
   verifiedAgents: number;
   completedSessions: number;
   domains: number;

@@ -296,7 +296,7 @@ function Exchange() {
         {can('knowledge.publish') && <Button variant="primary" className={view === 'mine' ? 'sm:ml-auto' : ''} icon={<Plus className="h-4 w-4" />} onClick={() => setContribute(true)}>Contribute</Button>}
       </div>
       {isLoading ? <GridSkeleton count={3} itemClassName="h-40" /> : error ? <ErrorState error={error} onRetry={() => mutate()} /> : !items.length ? (
-        <EmptyState icon={<Store className="h-5 w-5" />} title={view === 'browse' ? 'No verified knowledge listings' : 'No contributions yet'} description={view === 'browse' ? 'Listings appear here after StringMind moderation verifies them.' : 'Share verified knowledge and earn IDLE when others license it.'} />
+        <EmptyState icon={<Store className="h-5 w-5" />} title={view === 'browse' ? 'No verified knowledge listings' : 'No contributions yet'} description={view === 'browse' ? 'Listings appear here after Hive Mind moderation verifies them.' : 'Share verified knowledge and earn IDLE when others license it.'} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((l) => (
@@ -336,7 +336,7 @@ function ContributeModal({ open, onClose, onDone }: { open: boolean; onClose: ()
     if (r !== undefined) onDone();
   };
   return (
-    <Modal open={open} onClose={onClose} title="Contribute to Knowledge Exchange" description="Listings are reviewed by StringMind moderation before they become visible." size="lg"
+    <Modal open={open} onClose={onClose} title="Contribute to Knowledge Exchange" description="Listings are reviewed by Hive Mind moderation before they become visible." size="lg"
       footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy === 'x'} onClick={submit}>Submit for review</Button></>}>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Source" htmlFor="xs" required><Select id="xs" value={f.sourceId} onChange={(e) => setF({ ...f, sourceId: e.target.value })}><option value="">Choose…</option>{listOf(data).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>

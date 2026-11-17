@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TPL-FIX-FIN-01", "domain": "Financial Analysis", "domainSlug": null, "subtopic": "financial ratio interpretation", "taskType": "quant_reasoning",
+    "task": "You are reviewing a Financial Analysis workstream involving financial ratio interpretation. Design a small self-contained quantitative model for financial ratio interpretation. State assumptions, define at least three variables with units, show calculations or formulas, carry out a sensitivity analysis for two inputs, and explain when the model would fail. Do not invent externally sourced measurements.",
+    "rubric": [
+      { "id": "well_defined_variables_and_units", "criterion": "well-defined variables and units", "points": 25 },
+      { "id": "correct_formulas_and_arithmetic", "criterion": "correct formulas and arithmetic", "points": 25 },
+      { "id": "sensitivity_to_at_least_two_inputs", "criterion": "sensitivity to at least two inputs", "points": 25 },
+      { "id": "honest_model_boundaries", "criterion": "honest model boundaries", "points": 25 }
+    ],
+    "answers": [
+      { "level": "expert", "scores": { "well_defined_variables_and_units": 23, "correct_formulas_and_arithmetic": 23, "sensitivity_to_at_least_two_inputs": 22, "honest_model_boundaries": 21 },
+        "answer": "Model: interest coverage and leverage for a hypothetical company (illustrative numbers, not sourced data).\nVariables: EBIT (currency units per year) = 120; interest expense I (currency units per year) = 30; total debt D (currency units) = 500; EBITDA (currency units per year) = 160.\nFormulas: interest coverage ratio ICR = EBIT / I = 120 / 30 = 4.0x. Net leverage = D / EBITDA = 500 / 160 = 3.1x.\nSensitivity: (1) EBIT falls 25% to 90, so ICR = 3.0x; (2) the interest rate rises so I = 40, so ICR = 3.0x; both together give 90 / 40 = 2.25x, close to a typical covenant floor of 2.0x.\nAssumptions: EBIT is recurring, interest is all cash, no capitalised interest.\nWhen it fails: seasonal or one-off EBIT, floating-rate debt resetting mid-year, leases treated differently under IFRS 16, and ratios compared across industries with different capital intensity." },
+      { "level": "competent_missed_trap", "scores": { "well_defined_variables_and_units": 18, "correct_formulas_and_arithmetic": 18, "sensitivity_to_at_least_two_inputs": 4, "honest_model_boundaries": 6 },
+        "answer": "Variables: EBIT = 120 per year, interest expense = 30 per year, total debt = 500, EBITDA = 160 per year.\nInterest coverage = EBIT / interest = 120 / 30 = 4.0x, which indicates the company can comfortably pay its interest.\nNet leverage = debt / EBITDA = 500 / 160 = 3.1x, which is moderate.\nOverall the company looks financially healthy." },
+      { "level": "generic", "scores": { "well_defined_variables_and_units": 3, "correct_formulas_and_arithmetic": 2, "sensitivity_to_at_least_two_inputs": 3, "honest_model_boundaries": 4 },
+        "answer": "Financial ratios are useful tools for understanding a company's performance. A good model should clearly define its variables, use appropriate formulas and consider different scenarios.\nSensitivity analysis helps identify which inputs matter most, and every model has limitations that should be acknowledged. Analysts should combine ratio analysis with qualitative judgement and industry context to reach balanced conclusions that support decision-making." }
+    ]
+  },
+  {
+    "id": "TPL-FIX-ECO-01", "domain": "E-commerce & Retail", "domainSlug": null, "subtopic": "checkout conversion measurement", "taskType": "teach_and_transfer",
+    "task": "You are reviewing a E-commerce & Retail workstream involving checkout conversion measurement. Create a mini lesson that teaches checkout conversion measurement to a competent novice and verifies transfer to an unfamiliar case. Provide one worked example, two common misconceptions, three assessment questions with answers, and a scoring rubric.",
+    "rubric": [
+      { "id": "correct_example_with_steps", "criterion": "correct example with steps", "points": 25 },
+      { "id": "two_misconceptions_with_corrections", "criterion": "two misconceptions with corrections", "points": 25 },
+      { "id": "three_assessable_questions_and_answers", "criterion": "three assessable questions and answers", "points": 25 },
+      { "id": "scoring_rubric", "criterion": "scoring rubric", "points": 25 }
+    ],
+    "answers": [
+      { "level": "expert", "scores": { "correct_example_with_steps": 23, "two_misconceptions_with_corrections": 22, "three_assessable_questions_and_answers": 22, "scoring_rubric": 20 },
+        "answer": "Lesson: checkout conversion rate = completed orders / sessions that reached the checkout start step.\nWorked example: 8,000 sessions start checkout, 5,200 reach payment, 3,600 place an order. Checkout conversion = 3,600 / 8,000 = 45%. Step funnel: start to payment 65%, payment to order 69%.\nMisconception 1: using all site sessions as the denominator (that is site conversion, not checkout conversion). Correction: the denominator is checkout starts.\nMisconception 2: counting orders, not unique purchasing sessions; a session with two orders inflates the rate, so deduplicate by session or user.\nAssessment: Q1: 2,000 checkout starts, 700 orders. Rate? A: 35%. Q2: Why can a rise in checkout conversion coincide with lower revenue? A: fewer, higher-intent users reach checkout (the denominator shrinks) or average order value falls. Q3 (transfer, app store): 1,200 users tap Buy, 900 complete payment. Rate and the step to inspect? A: 75%; inspect the payment authorisation step.\nRubric: 1 point each for correct numeric answers, 1 point for naming the denominator, 2 points for the transfer explanation; pass at 4 of 5." },
+      { "level": "competent_missed_trap", "scores": { "correct_example_with_steps": 20, "two_misconceptions_with_corrections": 10, "three_assessable_questions_and_answers": 8, "scoring_rubric": 0 },
+        "answer": "Checkout conversion is the percentage of sessions that start checkout and end up placing an order.\nExample: 8,000 sessions start checkout and 3,600 place an order, so checkout conversion is 3,600 / 8,000 = 45%.\nA common mistake is to divide by all site visits instead of checkout starts.\nQuestion: if 2,000 sessions start checkout and 700 order, what is the conversion rate? Answer: 35%." },
+      { "level": "generic", "scores": { "correct_example_with_steps": 3, "two_misconceptions_with_corrections": 3, "three_assessable_questions_and_answers": 3, "scoring_rubric": 3 },
+        "answer": "Checkout conversion is an important metric for any online business. This lesson will help learners understand how to measure it and why it matters.\nLearners should understand key concepts, avoid common misconceptions and practise applying their knowledge. Assessment questions and a clear rubric help verify understanding. By focusing on the customer journey and continuously optimising the checkout experience, businesses can improve their results." }
+    ]
+  }
+]

@@ -6,12 +6,12 @@ export function TrophyArt({ size = 180, className }: { size?: number; className?
   return (
     <svg width={size} height={size} viewBox="0 0 200 200" className={className} aria-hidden>
       <defs>
-        <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="rgb(250 228 168)" /><stop offset=".45" stopColor="rgb(214 175 85)" /><stop offset="1" stopColor="rgb(140 104 34)" /></linearGradient>
+        <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="rgb(250 228 168)" /><stop offset=".45" stopColor="rgb(255 181 71)" /><stop offset="1" stopColor="rgb(140 104 34)" /></linearGradient>
         <linearGradient id={`h${id}`} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="rgb(255 255 255 / .55)" /><stop offset="1" stopColor="rgb(255 255 255 / 0)" /></linearGradient>
-        <radialGradient id={`r${id}`} cx=".5" cy=".45" r=".5"><stop offset="0" stopColor="rgb(214 175 85 / .45)" /><stop offset="1" stopColor="rgb(214 175 85 / 0)" /></radialGradient>
+        <radialGradient id={`r${id}`} cx=".5" cy=".45" r=".5"><stop offset="0" stopColor="rgb(255 181 71 / .45)" /><stop offset="1" stopColor="rgb(255 181 71 / 0)" /></radialGradient>
       </defs>
       <circle cx="100" cy="92" r="92" fill={`url(#r${id})`} />
-      {[[30, 40], [168, 52], [40, 130], [162, 120], [100, 14]].map(([x, y], i) => <path key={i} d={`M${x} ${y - 5}l1.6 3.4 3.4 1.6-3.4 1.6L${x} ${y + 5}l-1.6-3.4-3.4-1.6 3.4-1.6z`} fill="rgb(240 214 150)" opacity=".8" />)}
+      {[[30, 40], [168, 52], [40, 130], [162, 120], [100, 14]].map(([x, y], i) => <path key={i} d={`M${x} ${y - 5}l1.6 3.4 3.4 1.6-3.4 1.6L${x} ${y + 5}l-1.6-3.4-3.4-1.6 3.4-1.6z`} fill="rgb(255 214 150)" opacity=".8" />)}
       <path d="M62 44c-22 0-28 10-26 22 3 18 22 30 36 32" fill="none" stroke={`url(#g${id})`} strokeWidth="8" strokeLinecap="round" />
       <path d="M138 44c22 0 28 10 26 22-3 18-22 30-36 32" fill="none" stroke={`url(#g${id})`} strokeWidth="8" strokeLinecap="round" />
       <path d="M58 34h84v34c0 30-18 50-42 50S58 98 58 68z" fill={`url(#g${id})`} />
@@ -30,9 +30,9 @@ export function WalletArt({ size = 150, className }: { size?: number; className?
   return (
     <svg width={size} height={size * 0.8} viewBox="0 0 200 160" className={className} aria-hidden>
       <defs>
-        <linearGradient id={`w${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="rgb(240 214 150)" /><stop offset=".5" stopColor="rgb(214 175 85)" /><stop offset="1" stopColor="rgb(120 90 30)" /></linearGradient>
-        <radialGradient id={`c${id}`} cx=".35" cy=".35" r=".7"><stop offset="0" stopColor="rgb(255 240 200)" /><stop offset=".6" stopColor="rgb(214 175 85)" /><stop offset="1" stopColor="rgb(150 112 38)" /></radialGradient>
-        <radialGradient id={`gl${id}`} cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="rgb(214 175 85 / .35)" /><stop offset="1" stopColor="rgb(214 175 85 / 0)" /></radialGradient>
+        <linearGradient id={`w${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="rgb(255 214 150)" /><stop offset=".5" stopColor="rgb(255 181 71)" /><stop offset="1" stopColor="rgb(120 90 30)" /></linearGradient>
+        <radialGradient id={`c${id}`} cx=".35" cy=".35" r=".7"><stop offset="0" stopColor="rgb(255 240 200)" /><stop offset=".6" stopColor="rgb(255 181 71)" /><stop offset="1" stopColor="rgb(150 112 38)" /></radialGradient>
+        <radialGradient id={`gl${id}`} cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="rgb(255 181 71 / .35)" /><stop offset="1" stopColor="rgb(255 181 71 / 0)" /></radialGradient>
       </defs>
       <ellipse cx="100" cy="86" rx="96" ry="70" fill={`url(#gl${id})`} />
       <rect x="34" y="40" width="112" height="80" rx="14" fill="rgb(28 38 60)" stroke={`url(#w${id})`} strokeWidth="3" />

@@ -1,10 +1,11 @@
 'use client';
 /**
- * StringMind UI primitives. Import from '@/components/ui'.
+ * Hive Mind UI primitives. Import from '@/components/ui'.
  * Rules: gold = primary CTA & rewards; electric/violet = AI/tech; success = verified/positive.
  * Every async surface must render loading (Skeleton/Spinner), empty (EmptyState) and error (ErrorState) states.
  */
 import { clsx } from 'clsx';
+import { HexAvatar } from '@/components/brand/HexAvatar';
 import Link from 'next/link';
 import {
   createContext, forwardRef, useCallback, useContext, useEffect, useId, useRef, useState,
@@ -234,11 +235,10 @@ export function ScoreRing({ score, size = 64, label, verified }: { score: number
   );
 }
 
-export function Avatar({ name, src, size = 36, className }: { name: string; src?: string | null; size?: number; className?: string }) {
-  const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-  let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+/** Uploaded image when there is one; otherwise the agent's generated hive-cell avatar (stable per seed). */
+export function Avatar({ name, src, size = 36, className, seed }: { name: string; src?: string | null; size?: number; className?: string; /** agent id when known — falls back to the name */ seed?: string }) {
   if (src) return <img src={src} alt="" width={size} height={size} className={cn('rounded-xl object-cover', className)} />;
-  return <div aria-hidden className={cn('flex shrink-0 items-center justify-center rounded-xl font-semibold text-white', className)} style={{ width: size, height: size, fontSize: size * 0.36, background: `linear-gradient(135deg, hsl(${h} 70% 45%), hsl(${(h + 60) % 360} 70% 35%))` }}>{initials}</div>;
+  return <HexAvatar seed={seed ?? name} name={name} size={size} className={cn(className, '!rounded-none')} />;
 }
 
 export function PageHeader({ title, description, actions, eyebrow }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
@@ -296,7 +296,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export const useToast = () => useContext(ToastCtx);
 
 /* ───────── Formatting ───────── */
-/** Token amounts: StringMind uses IDLE Tokens only (never fiat). Kept under the legacy name for call-site stability. */
+/** Token amounts: Hive Mind uses IDLE Tokens only (never fiat). Kept under the legacy name for call-site stability. */
 export const fmtCredits = (n: number | null | undefined) => fmtIdle(n);
 export const fmtNumber = (n: number | null | undefined, d = 0) => (n == null ? '—' : new Intl.NumberFormat('en-IN', { maximumFractionDigits: d }).format(n));
 export const fmtPct = (n: number | null | undefined, d = 1) => (n == null ? '—' : `${n.toFixed(d)}%`);

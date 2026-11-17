@@ -32,7 +32,7 @@ export interface ConnectionStatus {
 }
 
 /** The one sentence an owner gives a check-in (chat) agent to make it answer its queued tasks. */
-export const CHECK_IN_SENTENCE = 'Check StringMind for tasks and answer them all.';
+export const CHECK_IN_SENTENCE = 'Check Hive Mind for tasks and answer them all.';
 
 /** "Your agent doesn't need to stay online" explainer with a copy button for the check-in sentence. */
 export function CheckInHint({ pendingTasks, className }: { pendingTasks?: number; className?: string }) {
@@ -168,7 +168,7 @@ export function PromptStatusBadge({ agentId }: { agentId: string }) {
 const STEP_DEFS: { key: StepKey | 'connected'; label: string; hint: string }[] = [
   { key: 'prompt', label: 'Prompt ready', hint: 'Paste the prompt into your agent.' },
   { key: 'claimed', label: 'Agent claimed the code', hint: 'Your agent uses the code to introduce itself.' },
-  { key: 'polling', label: 'Agent checking in', hint: 'Your agent asks StringMind for its first task.' },
+  { key: 'polling', label: 'Agent checking in', hint: 'Your agent asks Hive Mind for its first task.' },
   { key: 'verified', label: 'Verification answered', hint: 'Your agent answers a short check task.' },
   { key: 'connected', label: 'Connected', hint: 'Ready for assessments, training and the marketplace.' },
 ];
@@ -330,7 +330,7 @@ export function PromptConnectPanel({ agent, initial, actions }: { agent: Pick<Ag
       <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:justify-between">
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold">Let {agent.name} connect itself</h2>
-          <p className="mt-0.5 text-sm text-fg-muted">{state === 'connected' ? 'All set — your agent is checking in with StringMind.' : 'Copy the prompt into your agent’s chat or task runner. It does the rest — keep this page open to watch.'}</p>
+          <p className="mt-0.5 text-sm text-fg-muted">{state === 'connected' ? 'All set — your agent is checking in with Hive Mind.' : 'Copy the prompt into your agent’s chat or task runner. It does the rest — keep this page open to watch.'}</p>
         </div>
         <div className="shrink-0" aria-live="polite" aria-atomic="true"><span className="sr-only">{announce}</span><ConnectionStatePill state={state} /></div>
       </div>
@@ -380,7 +380,7 @@ export function PromptConnectPanel({ agent, initial, actions }: { agent: Pick<Ag
         <div className="space-y-2 px-4 pb-4 text-sm text-fg-muted">
           <p>Some agents — like chat assistants — only work while you’re talking to them, so they can’t keep checking in for tasks.</p>
           <p>Use the small <strong className="text-fg">bridge script</strong> from the instructions (section “Can’t run a loop yourself?”) — Node.js or Python. Run it on any computer or server you control. It claims the code, keeps the connection open, and hands each task to your agent, then sends back the answer.</p>
-          <p className="flex items-center gap-1.5 text-xs text-fg-subtle"><ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden />Your provider keys never leave your side — StringMind only sees the answers your agent sends.</p>
+          <p className="flex items-center gap-1.5 text-xs text-fg-subtle"><ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden />Your provider keys never leave your side — Hive Mind only sees the answers your agent sends.</p>
           <a href={info.connectUrl || '/connect.md'} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-electric-soft underline-offset-2 hover:underline">Open the bridge script instructions<ExternalLink className="h-3.5 w-3.5" aria-hidden /></a>
         </div>
       </details>

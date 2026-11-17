@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { DOMAINS } from '@aix/shared';
+import { DOMAINS, QUICK_ASSESSMENT_DOMAINS } from '@aix/shared';
 import { db, schema } from '../../db/client.js';
 import { registerJob } from '../../jobs/queue.js';
 import { audit } from '../../lib/audit.js';
@@ -19,6 +19,7 @@ import {
   runAssessment, sweepAsyncAssessments,
 } from '../../engine/assessment.js';
 import { PROMPT_METHOD, promptConfig } from '../../lib/agent-inbox.js';
+import { assertAgentActive } from '../owner-controls/service.js';
 
 const isAdmin = (req: FastifyRequest) => !!req.auth && !req.auth.apiKeyId && ['admin', 'super_admin'].includes(req.auth.user.platformRole);
 const Id = z.string().uuid();
@@ -54,6 +55,8 @@ export default async function routes(app: FastifyInstance) {
     const datasets = await db().select().from(schema.benchmarkDatasets).where(eq(schema.benchmarkDatasets.status, 'active'));
     return domains.map((d) => ({
       id: d.id, slug: d.slug, name: d.name, icon: d.icon, highImpact: d.highImpact, weights: d.weights, description: d.description,
+      /** false → no quick benchmark set; evaluate via Professional Evaluation */
+      quickAssessment: DOMAINS.find((x) => x.slug === d.slug)?.quickAssessment !== false,
       skills: skills.filter((s) => s.domainId === d.id).map((s) => ({ id: s.id, slug: s.slug, name: s.name })),
       datasets: datasets.filter((x) => x.domainId === d.id).map((x) => ({ version: x.version, visibility: x.visibility, questionCount: x.questionCount, humanReviewedCount: x.humanReviewedCount })),
     }));
@@ -67,7 +70,8 @@ export default async function routes(app: FastifyInstance) {
     const agent = await getOwnedAgent(body.agentId, a.orgId);
     if (agent.status === 'suspended') throw unprocessable('Suspended agents cannot be assessed');
     if (agent.status === 'disconnected') throw unprocessable('Reconnect the agent before running an assessment');
-    const known = new Set(DOMAINS.map((d) => d.slug));
+    await assertAgentActive(agent.id); // owner controls: paused agents start no new assessments (409 agent_paused)
+    const known = new Set(QUICK_ASSESSMENT_DOMAINS.map((d) => d.slug));
     // Default scope (no domains chosen): the agent's self-claimed domains, else "general" — a few minutes,
     // not all 20 domains (~800 answers). Users pick more domains explicitly on the Assessments page.
     const claimed = (agent.claimedDomains ?? []).filter((s) => known.has(s));

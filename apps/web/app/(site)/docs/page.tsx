@@ -7,7 +7,7 @@ import { HeroEyebrow } from '@/components/site/pages/kit';
 import { DocsToc } from '@/components/site/pages/docs';
 import { GradientWords } from '@/components/site/pages/GradientWords';
 
-export const metadata: Metadata = { title: 'API documentation', description: 'StringMind REST API reference: authentication, endpoints, webhooks and adapters, with curl and TypeScript examples.' };
+export const metadata: Metadata = { title: 'API documentation', description: 'Hive Mind REST API reference: authentication, endpoints, webhooks and adapters, with curl and TypeScript examples.' };
 
 const TOC = [
   { id: 'intro', label: 'Introduction' }, { id: 'auth', label: 'Authentication' }, { id: 'errors', label: 'Errors & pagination' },
@@ -108,7 +108,7 @@ app.post('/stringmind/webhook', express.raw({ type: 'application/json' }), (req,
   if (a.length !== b.length || !timingSafeEqual(a, b)) return res.status(401).end();
 
   const event = JSON.parse(body);
-  console.log('StringMind event', event);
+  console.log('Hive Mind event', event);
   res.status(204).end();
 });
 
@@ -124,12 +124,12 @@ const adapterEx = `export interface AgentRuntime {
 export interface AdapterCapabilities {
   chat: boolean; tools: boolean; streaming: boolean;
   fineTuning: boolean;
-  contextInjection: boolean;              // StringMind can inject instructions / memory / RAG on each call
+  contextInjection: boolean;              // Hive Mind can inject instructions / memory / RAG on each call
 }
 
 export interface InvokeRequest {
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
-  system?: string;                        // context injected by StringMind
+  system?: string;                        // context injected by Hive Mind
   maxTokens?: number; temperature?: number; timeoutMs?: number;
   purpose?: 'assessment' | 'training' | 'health' | 'playground';
 }
@@ -167,7 +167,7 @@ export default function DocsPage() {
       <GridBackground fade className="-z-10 opacity-60" />
       <div className="container-x py-14 sm:py-20">
         <Reveal><HeroEyebrow tone="electric">API reference · v1</HeroEyebrow></Reveal>
-        <h1 className="mt-5 text-4xl font-semibold tracking-[-0.02em] text-fg sm:text-6xl">StringMind API <GradientWords text="documentation" tone="ai" delay={0.1} /></h1>
+        <h1 className="mt-5 text-4xl font-semibold tracking-[-0.02em] text-fg sm:text-6xl">Hive Mind API <GradientWords text="documentation" tone="ai" delay={0.1} /></h1>
         <Reveal delay={0.2}><p className="mt-4 max-w-2xl text-fg-muted sm:text-lg">Everything the app does, over REST — with org-scoped keys, consistent errors, signed webhooks and realtime channels.</p></Reveal>
         <Reveal delay={0.3}>
           <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -191,12 +191,12 @@ export default function DocsPage() {
 
           <section id="intro" className="scroll-mt-24">
             <h2>Introduction</h2>
-            <p>The StringMind REST API exposes everything the app does. Requests and responses are JSON. Your base URL is your StringMind instance’s API server (locally <code>http://localhost:4700</code>). Dates are ISO strings, IDLE Token amounts are integers, scores are 0–100 and <code>null</code> means “not assessed”.</p>
+            <p>The Hive Mind REST API exposes everything the app does. Requests and responses are JSON. Your base URL is your Hive Mind instance’s API server (locally <code>http://localhost:4700</code>). Dates are ISO strings, IDLE Token amounts are integers, scores are 0–100 and <code>null</code> means “not assessed”.</p>
           </section>
 
           <section id="auth" className="scroll-mt-24">
             <h2>Authentication</h2>
-            <p>Create an API key in the <Link href="/app/developer">Developer Console</Link>. Keys are org-scoped, carry scopes and an environment, can expire and be rotated, and are shown <strong className="text-fg">once</strong> — StringMind only stores a hash.</p>
+            <p>Create an API key in the <Link href="/app/developer">Developer Console</Link>. Keys are org-scoped, carry scopes and an environment, can expire and be rotated, and are shown <strong className="text-fg">once</strong> — Hive Mind only stores a hash.</p>
             <pre><code>Authorization: Bearer aix_sk_...</code></pre>
             <p>Browser sessions use an httpOnly cookie instead. If your user belongs to several organisations, choose one with the <code>x-aix-org: &lt;orgId&gt;</code> header; membership is verified on every request.</p>
           </section>
@@ -251,7 +251,7 @@ export default function DocsPage() {
 
           <section id="adapters" className="scroll-mt-24">
             <h2>Adapters</h2>
-            <p>Every provider is wrapped by an adapter implementing a single runtime interface. Adapters declare their capabilities honestly — for example <code>fineTuning</code> is false for most providers, so StringMind stores learning as memory, RAG or instructions instead.</p>
+            <p>Every provider is wrapped by an adapter implementing a single runtime interface. Adapters declare their capabilities honestly — for example <code>fineTuning</code> is false for most providers, so Hive Mind stores learning as memory, RAG or instructions instead.</p>
             <CodeBlock code={adapterEx} title="adapters/types.ts" />
             <p className="mt-4">Use the <strong className="text-fg">custom REST</strong>, <strong className="text-fg">webhook</strong>, <strong className="text-fg">A2A</strong> or <strong className="text-fg">MCP</strong> adapters to connect agents that aren’t hosted by a listed provider. Webhook agents reply via <code>POST /developer/agent-callback/:agentId</code>, signed with <code>x-aix-signature</code>.</p>
           </section>

@@ -1,4 +1,4 @@
-# StringMind Architecture
+# Hive Mind Architecture
 
 ## System overview
 
@@ -45,7 +45,7 @@ settlement (release / refund per terms) → reputation → delayed retention ass
 | Knowledge retrieval (RAG) | `knowledge_*` + `embeddings` (pgvector HNSW) | retrieved per call |
 | Updated instructions | `agent_versions` | versioned, rollback |
 | Fine-tuning | not performed; designed for providers that allow it | — |
-StringMind never claims a hosted external model was permanently modified.
+Hive Mind never claims a hosted external model was permanently modified.
 
 **Money** → double-entry ledger: every balance change is a `transactions` row + `ledger_entries` that sum to zero
 (DB deferred constraint trigger), entries are append-only (DB trigger), cached wallet balances are updated in the same
@@ -71,7 +71,7 @@ DB transaction and can be reconciled at any time. Idempotency keys on every fina
 2. **PGlite for local dev** — real Postgres 16 + pgvector in-process, zero install on Windows/macOS. `DATABASE_URL` switches to a Postgres server with identical schema/migrations.
 3. **DB-backed job queue instead of Redis locally** — durable, inspectable in the admin panel; interface (`enqueue/registerJob`) is swappable for BullMQ/Redis.
 4. **Local hashing embeddings (`aix-hash-256`)** — offline, deterministic, free. Provider embedding models can be added as new `model` values.
-5. **Sandbox agents** — offline agents that answer only from StringMind-injected knowledge, so assessments and training produce *real*, measurable results without API keys. Labelled as sandbox everywhere.
+5. **Sandbox agents** — offline agents that answer only from Hive Mind-injected knowledge, so assessments and training produce *real*, measurable results without API keys. Labelled as sandbox everywhere.
 6. **Deterministic ground-truth evaluator** — independent of agents and trainers; optional LLM judge only for open-ended items when a platform evaluator key is configured.
 7. **Credits as integer units, double-entry ledger, DB-enforced invariants** — correctness of money is enforced by the database, not only by application code.
 8. **Same-origin API proxy** (Next.js rewrites) — httpOnly cookies without CORS complexity.

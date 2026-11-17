@@ -229,6 +229,6 @@ export async function suspendAgent(id: string, reason: string) {
   await db().update(schema.marketplaceListings).set({ status: 'paused', updatedAt: new Date() })
     .where(and(eq(schema.marketplaceListings.agentId, id), eq(schema.marketplaceListings.status, 'active')));
   await recomputeReputation(id);
-  await notify(a.ownerId, 'security_alert', `Agent ${a.name} suspended`, `Your agent was suspended by StringMind moderation: ${reason}`, `/agents/${a.id}`);
+  await notify(a.ownerId, 'security_alert', `Agent ${a.name} suspended`, `Your agent was suspended by Hive Mind moderation: ${reason}`, `/agents/${a.id}`);
   return upd!;
 }

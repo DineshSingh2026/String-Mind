@@ -182,7 +182,7 @@ function Browse({ sp, setParams, cardProps }: { sp: URLSearchParams; setParams: 
           : isLoading && !data ? <GridSkeleton count={6} />
           : items.length === 0 ? (
             <EmptyState icon={<Store className="h-5 w-5" />} title="No agents match these filters"
-              description={sp.toString() && (activeFilterCount || sp.get('q') || domain) ? 'Try widening your search or clearing filters. Only agents with public profiles appear here.' : 'No public agents have been published on this StringMind instance yet. Publish one of yours once it has a completed assessment.'}
+              description={sp.toString() && (activeFilterCount || sp.get('q') || domain) ? 'Try widening your search or clearing filters. Only agents with public profiles appear here.' : 'No public agents have been published on this Hive Mind instance yet. Publish one of yours once it has a completed assessment.'}
               action={(activeFilterCount || sp.get('q') || domain)
                 ? <Button variant="outline" onClick={() => setParams(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])))}>Clear all filters</Button>
                 : <Button variant="primary" href="/app/agents">Go to my agents</Button>} />

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { maybeAutoEvaluate } from '../../engine/pro-exam/auto.js'; // [pro-exams] auto-evaluation hook
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { DOMAINS } from '@aix/shared';
@@ -25,6 +26,7 @@ const DOMAIN_SLUGS = DOMAINS.map((d) => d.slug) as [string, ...string[]];
 export const DEFAULT_PERMISSIONS = {
   publicProfile: false, allowTraining: false, allowLearning: true, shareKnowledge: false,
   allowOwnerIntervention: true, dataSharing: 'artefacts_only' as const, allowedDomains: [] as string[],
+  autoEvaluate: true, // [pro-exams] auto-evaluation on connect (owner opt-out)
 };
 
 export const PermissionsSchema = z.object({
@@ -35,6 +37,7 @@ export const PermissionsSchema = z.object({
   allowOwnerIntervention: z.boolean(),
   dataSharing: z.enum(['none', 'artefacts_only', 'full_session']),
   allowedDomains: z.array(z.enum(DOMAIN_SLUGS)).max(DOMAIN_SLUGS.length),
+  autoEvaluate: z.boolean().optional(), // [pro-exams] auto-evaluation on connect; absent = true
 }).strict();
 
 const HttpUrl = z.string().trim().url('Enter a valid URL').max(2000)
@@ -100,7 +103,7 @@ export async function prepareConnection(provider: Provider, input: ConnectionInp
   if (NEEDS_ENDPOINT.has(provider.adapter) && !endpointUrl) throw unprocessable(`${provider.name} requires an endpoint URL`);
   if (provider.adapter === 'sandbox' && (input.endpointUrl || input.apiKey)) throw unprocessable('Sandbox agents take no endpoint or API key');
   if (provider.adapter === 'inbox') {
-    // Connect-via-prompt: nothing is shared — the agent claims a one-time code and polls StringMind for tasks.
+    // Connect-via-prompt: nothing is shared — the agent claims a one-time code and polls Hive Mind for tasks.
     if (input.endpointUrl || input.apiKey) throw unprocessable('Connect-via-prompt agents take no endpoint or API key — the agent connects itself with a claim code');
     const claim = freshClaim();
     return {
@@ -219,10 +222,12 @@ export async function runHealthCheck(agentId: string, opts: { source: 'manual' |
 
   if (result.ok && !wasConnected) {
     await emitEvent(agent.orgId, 'agent.connected', { agentId, name: agent.name, latencyMs: result.latencyMs });
+    // [pro-exams] auto-evaluation on connect (first successful connection): non-blocking, never throws, 24 h cooldown.
+    void maybeAutoEvaluate(agentId, 'connect');
   }
   if (!result.ok && opts.source === 'scheduled' && agent.health !== 'down') {
     await notify(agent.ownerId, 'agent_connection_failure', `${agent.name} failed its health check`,
-      `StringMind could not reach ${agent.name}: ${result.error ?? 'unknown error'}. Check the agent's connection settings.`, `/app/agents/${agentId}`);
+      `Hive Mind could not reach ${agent.name}: ${result.error ?? 'unknown error'}. Check the agent's connection settings.`, `/app/agents/${agentId}`);
     await emitEvent(agent.orgId, 'agent.health_failed', { agentId, name: agent.name, error: result.error ?? null, kind: result.kind ?? null });
   }
   if (result.ok) await ensureHealthCheckScheduled();

@@ -5,11 +5,11 @@ import { API_BASE, CodeBlock } from './common';
 
 export function QuickstartTab() {
   const ts = `// npm i undici (or use global fetch in Node 18+)
-const StringMind = '${API_BASE}';
+const Hive Mind = '${API_BASE}';
 const KEY = process.env.AIX_API_KEY!; // aix_sk_… — server-side only
 
 async function stringmind<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(StringMind + path, {
+  const res = await fetch(Hive Mind + path, {
     method,
     headers: { authorization: \`Bearer \${KEY}\`, 'content-type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,

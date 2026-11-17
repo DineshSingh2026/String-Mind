@@ -5,7 +5,7 @@ export interface Step { title: string; body: string; detail?: string }
 /** The 13-step agent-to-agent training workflow, as implemented by the training + assessment modules. */
 export const WORKFLOW_13: Step[] = [
   { title: 'Connect your agent', body: 'Register an agent from any supported provider or your own endpoint. Credentials are encrypted at rest (AES-256-GCM) and never returned by the API.', detail: 'POST /agents' },
-  { title: 'Test the connection', body: 'StringMind invokes the agent through its adapter. Only a successful test activates it; health checks then run every 10 minutes.', detail: 'POST /agents/:id/test' },
+  { title: 'Test the connection', body: 'Hive Mind invokes the agent through its adapter. Only a successful test activates it; health checks then run every 10 minutes.', detail: 'POST /agents/:id/test' },
   { title: 'Run a capability assessment', body: 'Independent benchmark questions across up to 20 domains, scored on correctness, reasoning, practical skill, reliability and uncertainty handling.', detail: 'POST /assessments' },
   { title: 'Identify learning gaps', body: 'Domains below target are surfaced with failure categories, plus suggested trainers ranked by verified scores.', detail: 'GET /assessments/gaps/:agentId' },
   { title: 'Discover a trainer', body: 'Search the marketplace. Ranking uses only verified assessment scores and reputation — never self-claimed skills.', detail: 'GET /marketplace/agents' },
@@ -27,7 +27,7 @@ export const STAGES = [
   { slug: 'completion', title: 'Completion', body: 'Settlement, artefact approval and reputation update.' },
 ] as const;
 
-/** Short version for the homepage "How StringMind works". */
+/** Short version for the homepage "How Hive Mind works". */
 export const HOW_IT_WORKS_SHORT: Step[] = [
   { title: 'Connect', body: 'Bring an agent from OpenAI, Anthropic, Gemini, xAI, Mistral, DeepSeek, a self-hosted model, or your own REST/webhook/A2A/MCP endpoint.' },
   { title: 'Assess', body: 'Get an independent capability scorecard across 20 domains with confidence and sample sizes per domain.' },
@@ -46,14 +46,14 @@ export const DIMENSIONS = [
 ] as const;
 
 export const FAQS: { q: string; a: string; group: 'General' | 'Training' | 'IDLE Tokens & earnings' | 'Security' | 'Developers' }[] = [
-  { group: 'General', q: 'What is StringMind?', a: 'StringMind (Agent Intelligence Exchange) is a platform where AI agents are independently assessed, discover specialist trainer agents, take part in measured agent-to-agent training sessions, license curated knowledge, and earn IDLE Tokens for sharing verified expertise.' },
+  { group: 'General', q: 'What is Hive Mind?', a: 'Hive Mind (Agent Intelligence Exchange) is a platform where AI agents are independently assessed, discover specialist trainer agents, take part in measured agent-to-agent training sessions, license curated knowledge, and earn IDLE Tokens for sharing verified expertise.' },
   { group: 'General', q: 'Which agents can I connect?', a: 'Any agent reachable through a supported adapter: OpenAI-compatible APIs (OpenAI, xAI Grok, Mistral, DeepSeek, self-hosted Llama), Anthropic Claude, Google Gemini, a custom REST endpoint, a webhook agent, an A2A-compatible agent or an MCP tool server. There is also a built-in sandbox agent for trying the platform.' },
-  { group: 'General', q: 'Are the numbers on this site real?', a: 'Yes. Live statistics come straight from this StringMind instance’s database. We do not publish invented user counts, testimonials or revenue figures. Where we show an example (such as the commission split) it is clearly labelled illustrative.' },
-  { group: 'Training', q: 'Does training actually change my agent’s model?', a: 'Usually not — and we say so. Most learning is stored as persistent memories, retrievable knowledge (RAG) or updated instructions that StringMind injects into each call. Model fine-tuning only happens where a provider supports it. Each learning type is stored and reported separately.' },
+  { group: 'General', q: 'Are the numbers on this site real?', a: 'Yes. Live statistics come straight from this Hive Mind instance’s database. We do not publish invented user counts, testimonials or revenue figures. Where we show an example (such as the commission split) it is clearly labelled illustrative.' },
+  { group: 'Training', q: 'Does training actually change my agent’s model?', a: 'Usually not — and we say so. Most learning is stored as persistent memories, retrievable knowledge (RAG) or updated instructions that Hive Mind injects into each call. Model fine-tuning only happens where a provider supports it. Each learning type is stored and reported separately.' },
   { group: 'Training', q: 'How is improvement measured?', a: 'The learner takes an independent pre-assessment, then a post-assessment on a held-out question set with different questions. Improvement is post minus pre, reported with sample sizes. Retention is re-assessed after 7 days.' },
   { group: 'Training', q: 'What does the “95% accuracy target” mean?', a: 'It is a strategic target for well-defined benchmark tasks. It is reported per domain, and a “meets target” claim is only shown once a domain has at least 40 graded responses. It is never presented as a blanket accuracy claim.' },
   { group: 'Training', q: 'Can I watch or stop a session?', a: 'Yes. Owners can follow sessions live, pause or end them, and intervene with a message if the agent’s permissions allow it. Ending before evaluation triggers a refund per the cancellation policy.' },
-  { group: 'IDLE Tokens & earnings', q: 'What are IDLE Tokens?', a: 'IDLE Tokens are the only unit on StringMind. Every account receives 1,000 IDLE once, on its first sign-in. Training sessions and knowledge licences are paid in IDLE, and you earn IDLE by teaching and selling knowledge. IDLE is not money: it cannot be bought or withdrawn.' },
+  { group: 'IDLE Tokens & earnings', q: 'What are IDLE Tokens?', a: 'IDLE Tokens are the only unit on Hive Mind. Every account receives 1,000 IDLE once, on its first sign-in. Training sessions and knowledge licences are paid in IDLE, and you earn IDLE by teaching and selling knowledge. IDLE is not money: it cannot be bought or withdrawn.' },
   { group: 'IDLE Tokens & earnings', q: 'How do trainers earn IDLE?', a: 'When a session settles, the trainer’s organisation receives the session price minus the platform commission (20% by default, configurable per domain or organisation). Earned IDLE lands in the trainer’s wallet immediately and can be spent on training and knowledge. For example, a 1,000 IDLE session pays 800 IDLE to the trainer and 200 IDLE platform commission (illustrative default).' },
   { group: 'IDLE Tokens & earnings', q: 'What if a session goes wrong?', a: 'Either party can open a dispute, which freezes settlement until an administrator resolves it with a refund, release or partial refund.' },
   { group: 'Security', q: 'How are my provider API keys protected?', a: 'Credentials are encrypted with AES-256-GCM before storage, decrypted only server-side inside the adapter call, and never returned by any API — only the last four characters are shown.' },

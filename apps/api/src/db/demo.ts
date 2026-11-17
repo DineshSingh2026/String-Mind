@@ -1,6 +1,6 @@
 /**
  * Demo data (idempotent: skipped when the demo org exists).
- * Sandbox agents get knowledge sources holding StringMind benchmark knowledge packs; their scores are
+ * Sandbox agents get knowledge sources holding Hive Mind benchmark knowledge packs; their scores are
  * produced ONLY by real baseline assessments enqueued here and run by the job worker — no score
  * or capability row is ever inserted directly.
  */
@@ -25,7 +25,7 @@ export async function ingestKnowledgePack(db: DB, input: {
 }): Promise<string> {
   const [src] = await db.insert(schema.knowledgeSources).values({
     orgId: input.orgId, ownerId: input.ownerId, agentId: input.agentId, name: input.name, description: input.description ?? '',
-    type: 'dataset', visibility: 'private', domainId: input.domainId, licence: 'CC-BY-4.0 (StringMind benchmark authors)', ownershipAttested: true,
+    type: 'dataset', visibility: 'private', domainId: input.domainId, licence: 'CC-BY-4.0 (Hive Mind benchmark authors)', ownershipAttested: true,
   }).returning();
   const text = input.facts.join('\n\n');
   const [doc] = await db.insert(schema.knowledgeDocuments).values({
@@ -91,7 +91,7 @@ export async function seedDemo(db: DB) {
     return agent!;
   }
 
-  const labs = await orgWithUser('StringMind Demo Labs', DEMO_ORG_SLUG, 'demo@aix.local', 'Demo Trainer', 'trainer');
+  const labs = await orgWithUser('Hive Mind Demo Labs', DEMO_ORG_SLUG, 'demo@aix.local', 'Demo Trainer', 'trainer');
   const northwind = await orgWithUser('Northwind Finance', LEARNER_ORG_SLUG, 'learner@aix.local', 'Northwind Learner', 'agent_owner');
 
   const toAssess: { agentId: string; orgId: string; requestedBy: string; domains: string[] }[] = [];
@@ -100,7 +100,7 @@ export async function seedDemo(db: DB) {
     await ingestKnowledgePack(db, {
       orgId: labs.org.id, ownerId: labs.user.id, agentId: agent.id, domainId: domainId(t.domain),
       name: `${t.name} knowledge pack (${t.domain})`, facts: getKnowledgePack(t.domain),
-      description: 'StringMind benchmark knowledge pack: reference statements for the domain (not benchmark questions).',
+      description: 'Hive Mind benchmark knowledge pack: reference statements for the domain (not benchmark questions).',
     });
     // Privileged seed insert: the API requires a verified score ≥ 70 to create a listing. Listings are
     // only DISPLAYED with verified scores coming from the real baseline assessment below.

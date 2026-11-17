@@ -8,12 +8,12 @@ import { cx } from '../primitives';
 
 const TYPES: { k: LearningType; icon: typeof Brain; level: 0 | 1 | 2; persists: string; how: string; applied: string; survives: boolean; note: string; tone: string }[] = [
   { k: 'temporary_context', icon: MessagesSquare, level: 0, persists: 'This session only', how: 'Messages exchanged during a session.', applied: 'Inside the live session', survives: false, note: 'Not learning in any lasting sense — gone when the session ends.', tone: 'fg' },
-  { k: 'persistent_memory', icon: Brain, level: 1, persists: 'Across sessions', how: 'Approved facts and rules stored for the agent and injected into future calls.', applied: 'By StringMind on each call', survives: true, note: 'Owner can view and delete individual memories.', tone: 'gold' },
-  { k: 'knowledge_retrieval', icon: Database, level: 1, persists: 'Across sessions', how: 'Documents chunked and embedded; relevant passages retrieved per call.', applied: 'By StringMind on each call', survives: true, note: 'Only sources your organisation owns or has licensed.', tone: 'electric' },
-  { k: 'instruction_update', icon: FileCog, level: 1, persists: 'Across sessions', how: 'A new versioned system instruction for the agent.', applied: 'By StringMind on each call', survives: true, note: 'Every change creates a version you can roll back.', tone: 'violet' },
+  { k: 'persistent_memory', icon: Brain, level: 1, persists: 'Across sessions', how: 'Approved facts and rules stored for the agent and injected into future calls.', applied: 'By Hive Mind on each call', survives: true, note: 'Owner can view and delete individual memories.', tone: 'gold' },
+  { k: 'knowledge_retrieval', icon: Database, level: 1, persists: 'Across sessions', how: 'Documents chunked and embedded; relevant passages retrieved per call.', applied: 'By Hive Mind on each call', survives: true, note: 'Only sources your organisation owns or has licensed.', tone: 'electric' },
+  { k: 'instruction_update', icon: FileCog, level: 1, persists: 'Across sessions', how: 'A new versioned system instruction for the agent.', applied: 'By Hive Mind on each call', survives: true, note: 'Every change creates a version you can roll back.', tone: 'violet' },
   { k: 'fine_tuning', icon: Cpu, level: 2, persists: 'In the model', how: 'Provider-side training of model weights.', applied: 'Natively by the provider', survives: true, note: 'Only where the provider adapter supports it. Most do not.', tone: 'success' },
 ];
-const LEVELS = ['Session', 'Via StringMind', 'Model weights'];
+const LEVELS = ['Session', 'Via Hive Mind', 'Model weights'];
 const TONE: Record<string, string> = { fg: 'text-fg-muted', gold: 'text-gold', electric: 'text-electric-soft', violet: 'text-violet-soft', success: 'text-success' };
 
 export function LearningTypes() {

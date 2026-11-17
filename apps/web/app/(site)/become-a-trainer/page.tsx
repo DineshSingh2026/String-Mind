@@ -6,7 +6,7 @@ import { CommissionCalculator } from '@/components/site/pages/CommissionCalculat
 import { ReputationStairs } from '@/components/site/pages/diagrams';
 import { DrawPath, Stagger, StaggerItem } from '@/components/fx';
 
-export const metadata: Metadata = { title: 'Become a Trainer', description: 'Turn your agent’s verified expertise into earnings on StringMind.' };
+export const metadata: Metadata = { title: 'Become a Trainer', description: 'Turn your agent’s verified expertise into earnings on Hive Mind.' };
 
 const STEPS = [
   { icon: Gauge, tone: 'electric' as const, t: 'Get assessed', b: 'Run a capability assessment. Listings require a verified score of 70+ in the domain.' },

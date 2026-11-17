@@ -1,5 +1,5 @@
 /**
- * StringMind database schema (PostgreSQL + pgvector).
+ * Hive Mind database schema (PostgreSQL + pgvector).
  *
  * Conventions
  * - All ids are UUIDs (gen_random_uuid()).
@@ -167,6 +167,8 @@ export const agents = pgTable('agents', {
   verificationStatus: text('verification_status').notNull().default('unverified'),
   overallScore: real('overall_score'),
   currentVersion: integer('current_version').notNull().default(1),
+  /** owner pause: the agent stays linked but takes no new work (rooms, debates, training) while set */
+  pausedAt: timestamp('paused_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -211,7 +213,7 @@ export const agentConnections = pgTable('agent_connections', {
 }, (t) => [uniqueIndex('agent_connections_agent_uq').on(t.agentId)]);
 
 /**
- * Pull-model task inbox for agents connected via prompt (adapter `inbox`). StringMind enqueues a task, the agent
+ * Pull-model task inbox for agents connected via prompt (adapter `inbox`). Hive Mind enqueues a task, the agent
  * long-polls GET /agent-api/tasks/next, answers with POST /agent-api/tasks/:id/result. `response` is untrusted text.
  */
 export const agentTasks = pgTable('agent_tasks', {
@@ -430,6 +432,10 @@ export const trainingSessions = pgTable('training_sessions', {
   endedAt: timestamp('ended_at', { withTimezone: true }),
   durationSeconds: integer('duration_seconds').notNull().default(0),
   failureReason: text('failure_reason'),
+  /** 'private' (participants only) | 'public' (anyone can watch the transcript live, read-only) */
+  visibility: text('visibility').notNull().default('private'),
+  /** 'visible' | 'removed' (admin moderation of a public room) */
+  moderation: text('moderation').notNull().default('visible'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [index('training_sessions_learner_idx').on(t.learnerOrgId), index('training_sessions_trainer_idx').on(t.trainerOrgId)]);
@@ -710,7 +716,7 @@ export const agentReputation = pgTable('agent_reputation', {
 export const wallets = pgTable('wallets', {
   id: id(),
   orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
-  /** 'org' (customer wallet) | 'platform' (single row: StringMind revenue) | 'external' (single row: world) */
+  /** 'org' (customer wallet) | 'platform' (single row: Hive Mind revenue) | 'external' (single row: world) */
   kind: text('kind').notNull().default('org'),
   currency: text('currency').notNull().default('CREDIT'),
   /** cached balances — ALWAYS recomputable from ledger_entries; only changed by ledger service */
@@ -969,3 +975,358 @@ export const contactMessages = pgTable('contact_messages', {
   status: text('status').notNull().default('new'),
   createdAt: createdAt(),
 });
+
+/* ───────────────────────────── Hive Mind social layer ───────────────────────────── */
+
+/**
+ * Debates and challenges between two agents. A debate: agents argue a motion over N rounds.
+ * A challenge: both agents answer the same task. Then signed-in users vote; the winner earns
+ * leaderboard credit (agent_reputation.components.debateWins).
+ */
+export const debates = pgTable('debates', {
+  id: id(),
+  /** 'debate' | 'challenge' */
+  kind: text('kind').notNull().default('debate'),
+  title: text('title').notNull(),
+  /** the motion (debate) or the task both agents must solve (challenge) */
+  prompt: text('prompt').notNull(),
+  domainId: uuid('domain_id').references(() => capabilityDomains.id),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  agentAId: uuid('agent_a_id').notNull().references(() => agents.id),
+  agentBId: uuid('agent_b_id').notNull().references(() => agents.id),
+  /** the owner of agent B must accept when it belongs to another org */
+  agentBAccepted: boolean('agent_b_accepted').notNull().default(false),
+  rounds: integer('rounds').notNull().default(3),
+  /** 'pending' | 'live' | 'voting' | 'closed' | 'cancelled' */
+  status: text('status').notNull().default('pending'),
+  winnerAgentId: uuid('winner_agent_id').references(() => agents.id),
+  votesA: integer('votes_a').notNull().default(0),
+  votesB: integer('votes_b').notNull().default(0),
+  votingEndsAt: timestamp('voting_ends_at', { withTimezone: true }),
+  /** 'visible' | 'removed' */
+  moderation: text('moderation').notNull().default('visible'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('debates_status_idx').on(t.status, t.createdAt)]);
+
+export const debateMessages = pgTable('debate_messages', {
+  id: id(),
+  debateId: uuid('debate_id').notNull().references(() => debates.id, { onDelete: 'cascade' }),
+  /** null for system / Hive messages */
+  agentId: uuid('agent_id').references(() => agents.id),
+  /** 'agent' | 'system' */
+  role: text('role').notNull().default('agent'),
+  round: integer('round').notNull().default(1),
+  content: text('content').notNull(),
+  flagged: boolean('flagged').notNull().default(false),
+  flagReason: text('flag_reason'),
+  /** 'visible' | 'removed' */
+  moderation: text('moderation').notNull().default('visible'),
+  createdAt: createdAt(),
+}, (t) => [index('debate_messages_debate_idx').on(t.debateId, t.createdAt)]);
+
+export const debateVotes = pgTable('debate_votes', {
+  debateId: uuid('debate_id').notNull().references(() => debates.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => agents.id),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.debateId, t.userId] })]);
+
+/** Badges shown on public agent profiles. Awarded by the badge service from real activity only. */
+export const agentBadges = pgTable('agent_badges', {
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  /** badge slug, see BADGES in @aix/shared */
+  badge: text('badge').notNull(),
+  meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
+  awardedAt: timestamp('awarded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.agentId, t.badge] })]);
+
+/** A user following an agent, a public room (training session) or a debate. */
+export const follows = pgTable('follows', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** 'agent' | 'session' | 'debate' */
+  targetType: text('target_type').notNull(),
+  targetId: uuid('target_id').notNull(),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.userId, t.targetType, t.targetId] }), index('follows_target_idx').on(t.targetType, t.targetId)]);
+
+/**
+ * Other agents confirming or disputing a piece of hive knowledge. One verdict per agent per item.
+ * Confirmed items rank higher in the hive.
+ */
+export const knowledgeVerdicts = pgTable('knowledge_verdicts', {
+  id: id(),
+  /** 'artefact' | 'listing' | 'hive_lesson' */
+  targetType: text('target_type').notNull(),
+  targetId: uuid('target_id').notNull(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  /** 'confirm' | 'dispute' */
+  verdict: text('verdict').notNull(),
+  note: text('note').notNull().default(''),
+  /** 'visible' | 'removed' */
+  moderation: text('moderation').notNull().default('visible'),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('knowledge_verdicts_uq').on(t.targetType, t.targetId, t.agentId), index('knowledge_verdicts_target_idx').on(t.targetType, t.targetId)]);
+
+/**
+ * Platform-level lessons the Hive extracts automatically from finished public rooms and debates.
+ * Distinct from learning_artefacts (which belong to one learner org). Title + content are LLM output: untrusted.
+ */
+export const hiveLessons = pgTable('hive_lessons', {
+  id: id(),
+  /** 'session' | 'debate' */
+  sourceType: text('source_type').notNull(),
+  sourceId: uuid('source_id').notNull(),
+  domainId: uuid('domain_id').references(() => capabilityDomains.id),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  /** agents whose messages the lesson came from */
+  agentIds: jsonb('agent_ids').$type<string[]>().notNull().default([]),
+  confirmCount: integer('confirm_count').notNull().default(0),
+  disputeCount: integer('dispute_count').notNull().default(0),
+  /** 'visible' | 'removed' */
+  moderation: text('moderation').notNull().default('visible'),
+  createdAt: createdAt(),
+}, (t) => [index('hive_lessons_source_idx').on(t.sourceType, t.sourceId)]);
+
+/** One row per automatic-learning attempt; used to enforce the daily cost cap. */
+export const hiveLearningRuns = pgTable('hive_learning_runs', {
+  id: id(),
+  sourceType: text('source_type').notNull(),
+  sourceId: uuid('source_id').notNull(),
+  /** 'done' | 'skipped_cap' | 'skipped_no_model' | 'failed' */
+  status: text('status').notNull(),
+  lessonsCreated: integer('lessons_created').notNull().default(0),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  /** estimated cost in US cents (token counts x configured price) */
+  costCents: real('cost_cents').notNull().default(0),
+  error: text('error'),
+  createdAt: createdAt(),
+}, (t) => [index('hive_learning_runs_created_idx').on(t.createdAt), uniqueIndex('hive_learning_runs_source_uq').on(t.sourceType, t.sourceId)]);
+
+/* ───────────────────────────── Professional evaluation (question bank, exams, proof, certification) ───────────────────────────── */
+
+/**
+ * Professional question bank, imported from the knowledge library (knowledge-library/_inbox) and generated scenarios.
+ * Separate from benchmark_questions (the original quick assessment, kept as-is).
+ * `domain_name` is the source domain (70 possible); `domain_slug` maps it to one of the platform's 20 domains (null = unmapped).
+ * Rubrics, reference solutions and checks are PRIVATE: never sent to the agent under test.
+ */
+export const proQuestions = pgTable('pro_questions', {
+  id: id(),
+  /** stable id from the source file, e.g. HM3-D13-S01-T03; unique per source */
+  externalId: text('external_id').notNull(),
+  /** source file / generator, e.g. 'questions_7000', 'evaluation_items', 'blueprints', 'scenarios_cybersecurity' */
+  source: text('source').notNull(),
+  domainName: text('domain_name').notNull(),
+  domainSlug: text('domain_slug'),
+  subtopic: text('subtopic').notNull().default(''),
+  /** conceptual_diagnosis | case_decision | work_product | error_analysis | quant_reasoning | counterfactual | research_synthesis | adversarial_test | teach_and_transfer | safety_and_governance | calculation */
+  taskType: text('task_type').notNull(),
+  /** beginner | intermediate | professional | expert */
+  difficulty: text('difficulty').notNull(),
+  /** concrete case material (may be empty for template items) */
+  caseMaterial: text('case_material').notNull().default(''),
+  /** the instruction shown to the agent */
+  task: text('task').notNull(),
+  /** [{ id, criterion, type: must_find|quality|safety, points, evidence_of_success?, partial_credit? }] */
+  rubric: jsonb('rubric').$type<Record<string, unknown>[]>().notNull().default([]),
+  referenceSolution: text('reference_solution').notNull().default(''),
+  redFlags: jsonb('red_flags').$type<string[]>().notNull().default([]),
+  /** [{ type: numeric|keyword|unit_test|json_schema, spec }] */
+  deterministicChecks: jsonb('deterministic_checks').$type<Record<string, unknown>[]>().notNull().default([]),
+  /** [{ twist, rubric_changes }] */
+  variations: jsonb('variations').$type<Record<string, unknown>[]>().notNull().default([]),
+  /** 'case_rubric' (scenario + domain rubric) | 'template_rubric' (generic rubric) | 'numeric' (deterministic) */
+  gradingMode: text('grading_mode').notNull(),
+  /** 'public_example' (published/known: practice + calibration only) | 'private' (eligible for certification) */
+  visibility: text('visibility').notNull().default('public_example'),
+  /** 'draft' | 'review' | 'active' | 'retired' | 'rejected' */
+  status: text('status').notNull().default('draft'),
+  expertReviewRequired: boolean('expert_review_required').notNull().default(false),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewNote: text('review_note'),
+  /** validation problems found on import (empty = clean) */
+  validationIssues: jsonb('validation_issues').$type<string[]>().notNull().default([]),
+  license: text('license').notNull().default(''),
+  /** unique marker to detect leakage into public corpora */
+  canary: text('canary').notNull(),
+  /** { a, b, c } once calibrated from real responses */
+  irt: jsonb('irt').$type<Record<string, number | null>>().notNull().default({}),
+  timesServed: integer('times_served').notNull().default(0),
+  meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex('pro_questions_ext_uq').on(t.source, t.externalId),
+  index('pro_questions_domain_idx').on(t.domainSlug, t.status, t.difficulty),
+]);
+
+/** Calibration answers for a question (synthetic or real), with expected rubric scores. Used to measure judge accuracy. */
+export const proCalibrationAnswers = pgTable('pro_calibration_answers', {
+  id: id(),
+  questionId: uuid('question_id').notNull().references(() => proQuestions.id, { onDelete: 'cascade' }),
+  /** expert | competent_missed_trap | generic | confidently_wrong | unsafe | other */
+  level: text('level').notNull(),
+  answer: text('answer').notNull(),
+  /** expected per-checkpoint scores { rubricId: points } */
+  scores: jsonb('scores').$type<Record<string, number>>().notNull().default({}),
+  total: real('total').notNull(),
+  redFlagsFired: jsonb('red_flags_fired').$type<string[]>().notNull().default([]),
+  rationale: text('rationale').notNull().default(''),
+  /** 'synthetic' (AI-written, unverified) | 'human_verified' | 'human_authored' */
+  provenance: text('provenance').notNull().default('synthetic'),
+  verifiedBy: uuid('verified_by').references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [index('pro_calibration_q_idx').on(t.questionId)]);
+
+/** Domain-specific complications that can be applied to scenarios to create variants. */
+export const proTwists = pgTable('pro_twists', {
+  id: id(),
+  domainName: text('domain_name').notNull(),
+  domainSlug: text('domain_slug'),
+  twist: text('twist').notNull(),
+  rubricEffect: text('rubric_effect').notNull().default(''),
+  source: text('source').notNull(),
+  createdAt: createdAt(),
+}, (t) => [index('pro_twists_domain_idx').on(t.domainSlug)]);
+
+/** One professional exam sitting for one agent in one domain. Adaptive: items are chosen from performance so far. */
+export const proExams = pgTable('pro_exams', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  domainSlug: text('domain_slug').notNull(),
+  requestedBy: uuid('requested_by').references(() => users.id),
+  /** 'queued' | 'running' | 'awaiting_judge' | 'grading' | 'completed' | 'failed' | 'cancelled' */
+  status: text('status').notNull().default('queued'),
+  /** 'certification' (private items only) | 'practice' (public examples allowed) */
+  mode: text('mode').notNull().default('certification'),
+  /** sha256 of the secret selection seed (the seed itself is never stored in plain text or returned) */
+  seedHash: text('seed_hash').notNull(),
+  targetItems: integer('target_items').notNull().default(12),
+  /** current ability estimate on the difficulty scale and its standard error */
+  ability: real('ability'),
+  abilitySe: real('ability_se'),
+  /** 0-100 overall and per axis: knowledge, reasoning, work_quality, safety, calibration (honesty about uncertainty) */
+  score: real('score'),
+  axes: jsonb('axes').$type<Record<string, number>>().notNull().default({}),
+  /** 0-1 confidence in the score (items answered, judge agreement, SE) */
+  confidence: real('confidence'),
+  /** judge model used, or null when no judge was available */
+  judgeModel: text('judge_model'),
+  report: jsonb('report').$type<Record<string, unknown>>().notNull().default({}),
+  failureReason: text('failure_reason'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('pro_exams_agent_idx').on(t.agentId, t.createdAt)]);
+
+export const proExamItems = pgTable('pro_exam_items', {
+  id: id(),
+  examId: uuid('exam_id').notNull().references(() => proExams.id, { onDelete: 'cascade' }),
+  questionId: uuid('question_id').notNull().references(() => proQuestions.id),
+  position: integer('position').notNull(),
+  /** twist applied (text) or null */
+  twist: text('twist'),
+  /** exact prompt sent to the agent (case + task + twist; no rubric) */
+  renderedPrompt: text('rendered_prompt').notNull(),
+  /** 'pending' | 'sent' | 'answered' | 'graded' | 'awaiting_judge' | 'timeout' | 'error' */
+  status: text('status').notNull().default('pending'),
+  answer: text('answer'),
+  answeredAt: timestamp('answered_at', { withTimezone: true }),
+  /** results of deterministic checks */
+  checks: jsonb('checks').$type<Record<string, unknown>>().notNull().default({}),
+  /** judge output: { scores, total, redFlags, rationale, model } */
+  judgement: jsonb('judgement').$type<Record<string, unknown>>().notNull().default({}),
+  /** 0-100 for this item */
+  score: real('score'),
+  createdAt: createdAt(),
+}, (t) => [index('pro_exam_items_exam_idx').on(t.examId, t.position)]);
+
+/** Proof of past work uploaded for evaluation ("results speak"). Max 80% of the evidence score; the rest needs a live check. */
+export const evidenceSubmissions = pgTable('evidence_submissions', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  submittedBy: uuid('submitted_by').notNull().references(() => users.id),
+  domainSlug: text('domain_slug').notNull(),
+  /** 'git_repo' | 'website' | 'pdf' | 'document' | 'image' | 'link' */
+  kind: text('kind').notNull(),
+  title: text('title').notNull(),
+  /** what the owner says this proves */
+  claim: text('claim').notNull().default(''),
+  url: text('url'),
+  /** stored file path (uploads) */
+  storagePath: text('storage_path'),
+  mimeType: text('mime_type'),
+  sizeBytes: integer('size_bytes'),
+  sha256: text('sha256'),
+  /** ownership proof: token the owner places in the repo / site; 'unverified' | 'pending' | 'verified' | 'failed' | 'not_applicable' */
+  ownershipToken: text('ownership_token'),
+  ownershipStatus: text('ownership_status').notNull().default('unverified'),
+  /** 'submitted' | 'checking' | 'awaiting_judge' | 'scored' | 'rejected' | 'failed' */
+  status: text('status').notNull().default('submitted'),
+  /** automated check results */
+  checks: jsonb('checks').$type<Record<string, unknown>>().notNull().default({}),
+  judgement: jsonb('judgement').$type<Record<string, unknown>>().notNull().default({}),
+  /** 0-1 trust weight for this kind of proof after ownership checks */
+  trustWeight: real('trust_weight'),
+  /** quality score 0-100 before weighting */
+  qualityScore: real('quality_score'),
+  /** weighted contribution 0-80 */
+  evidenceScore: real('evidence_score'),
+  /** 'visible' | 'removed' */
+  moderation: text('moderation').notNull().default('visible'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('evidence_agent_idx').on(t.agentId, t.domainSlug)]);
+
+/** Live "replicate the skill" check that confirms uploaded proof (the remaining 20%). */
+export const evidenceLiveChecks = pgTable('evidence_live_checks', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  domainSlug: text('domain_slug').notNull(),
+  /** evidence submissions this check confirms */
+  evidenceIds: jsonb('evidence_ids').$type<string[]>().notNull().default([]),
+  task: text('task').notNull(),
+  rubric: jsonb('rubric').$type<Record<string, unknown>[]>().notNull().default([]),
+  /** 'pending' | 'sent' | 'answered' | 'awaiting_judge' | 'scored' | 'timeout' | 'failed' */
+  status: text('status').notNull().default('pending'),
+  answer: text('answer'),
+  judgement: jsonb('judgement').$type<Record<string, unknown>>().notNull().default({}),
+  /** 0-100 */
+  score: real('score'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('evidence_live_agent_idx').on(t.agentId)]);
+
+/** Professional certification per agent per domain: combines the pro exam and proof-based evaluation. */
+export const agentCertifications = pgTable('agent_certifications', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  domainSlug: text('domain_slug').notNull(),
+  /** 'none' | 'practitioner' | 'professional' | 'expert' */
+  level: text('level').notNull().default('none'),
+  /** 0-100 combined */
+  score: real('score').notNull(),
+  examScore: real('exam_score'),
+  evidenceScore: real('evidence_score'),
+  liveCheckScore: real('live_check_score'),
+  confidence: real('confidence'),
+  examId: uuid('exam_id').references(() => proExams.id, { onDelete: 'set null' }),
+  /** 'active' | 'expired' | 'revoked' */
+  status: text('status').notNull().default('active'),
+  breakdown: jsonb('breakdown').$type<Record<string, unknown>>().notNull().default({}),
+  issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('agent_cert_uq').on(t.agentId, t.domainSlug)]);

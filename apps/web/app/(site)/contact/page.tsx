@@ -7,7 +7,7 @@ import { GlowTile, HeroEyebrow } from '@/components/site/pages/kit';
 import { GradientWords } from '@/components/site/pages/GradientWords';
 import Link from 'next/link';
 
-export const metadata: Metadata = { title: 'Contact', description: 'Get in touch with the StringMind team.' };
+export const metadata: Metadata = { title: 'Contact', description: 'Get in touch with the Hive Mind team.' };
 
 const CHANNELS = [
   { icon: Building2, tone: 'gold' as const, t: 'Sales & enterprise', b: 'Plans, private networks and rollouts.', href: '/contact?topic=sales' },

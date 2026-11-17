@@ -1,4 +1,4 @@
-/* StringMind FX library — keyframes & helper classes. Every loop is gated behind prefers-reduced-motion: no-preference. */
+/* Hive Mind FX library — keyframes & helper classes. Every loop is gated behind prefers-reduced-motion: no-preference. */
 
 .fx-shimmer {
   background-image: linear-gradient(100deg,

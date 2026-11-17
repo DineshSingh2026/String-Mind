@@ -1,5 +1,5 @@
 /**
- * Builds the persistent context StringMind injects into every agent call:
+ * Builds the persistent context Hive Mind injects into every agent call:
  *   instructions (agent_versions) + persistent memories + retrieved knowledge (RAG).
  * Only knowledge the agent's org may access is used (own-org sources linked to the agent,
  * or sources licensed through the Knowledge Exchange). Temporary context is per-session only.
@@ -7,6 +7,7 @@
 import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db, rowsOf, schema } from '../db/client.js';
 import { cosine, embed, LOCAL_EMBEDDING_MODEL } from './embeddings.js';
+import { retrievalBoost } from '../modules/hive-learning/rank.js';
 
 export interface ContextItem { kind: 'memory' | 'knowledge'; id: string; content: string; score: number; title?: string }
 export interface AgentContext { text: string; items: ContextItem[] }
@@ -41,6 +42,26 @@ export async function searchChunks(query: string, sourceIds: string[], limit = 6
     .map((r) => ({ ...r, score: Number(r.score) }));
 }
 
+/**
+ * Ranking hook: knowledge from a Knowledge Exchange listing that other agents confirmed ranks slightly
+ * higher, disputed knowledge slightly lower (multiplier 0.9..1.1, 1 when there are no verdicts; see
+ * modules/hive-learning/rank.ts). Relevance stays the dominant signal; minScore is checked before the boost.
+ */
+async function sourceVerdictBoosts(sourceIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!sourceIds.length) return out;
+  const rows = await db().select({
+    sourceId: schema.knowledgeListings.sourceId,
+    confirms: sql<number>`count(*) filter (where ${schema.knowledgeVerdicts.verdict} = 'confirm')::int`,
+    disputes: sql<number>`count(*) filter (where ${schema.knowledgeVerdicts.verdict} = 'dispute')::int`,
+  }).from(schema.knowledgeVerdicts)
+    .innerJoin(schema.knowledgeListings, eq(schema.knowledgeListings.id, schema.knowledgeVerdicts.targetId))
+    .where(and(eq(schema.knowledgeVerdicts.targetType, 'listing'), eq(schema.knowledgeVerdicts.moderation, 'visible'), inArray(schema.knowledgeListings.sourceId, sourceIds)))
+    .groupBy(schema.knowledgeListings.sourceId);
+  for (const r of rows) out.set(r.sourceId, retrievalBoost({ confirmCount: Number(r.confirms), disputeCount: Number(r.disputes) }));
+  return out;
+}
+
 export async function buildAgentContext(agentId: string, query: string, opts: { limit?: number; minScore?: number; sessionId?: string } = {}): Promise<AgentContext> {
   const limit = opts.limit ?? 6;
   const minScore = opts.minScore ?? 0.12;
@@ -55,8 +76,9 @@ export async function buildAgentContext(agentId: string, query: string, opts: { 
     .filter((m) => m.score >= minScore);
 
   const chunks = await searchChunks(query, await accessibleSourceIds(agentId), limit);
+  const boost = await sourceVerdictBoosts([...new Set(chunks.map((c) => c.source_id))]);
   const kItems: ContextItem[] = chunks.filter((c) => c.score >= minScore)
-    .map((c) => ({ kind: 'knowledge' as const, id: c.id, content: c.content, score: c.score, title: c.title }));
+    .map((c) => ({ kind: 'knowledge' as const, id: c.id, content: c.content, score: c.score * (boost.get(c.source_id) ?? 1), title: c.title }));
 
   const items = [...memItems, ...kItems].sort((a, b) => b.score - a.score).slice(0, limit);
   const text = items.length

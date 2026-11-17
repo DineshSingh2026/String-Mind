@@ -283,7 +283,7 @@ export function DisputeModal({ open, onClose, sessionId, onDone }: { open: boole
     setBusy(true);
     try {
       await api.post('/disputes', { sessionId, reason, details: details.trim() });
-      toast('success', 'Dispute raised — an StringMind administrator will review it');
+      toast('success', 'Dispute raised — an Hive Mind administrator will review it');
       onDone(); onClose();
     } catch (e) { toast('danger', errorMessage(e)); } finally { setBusy(false); }
   };

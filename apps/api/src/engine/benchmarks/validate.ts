@@ -2,7 +2,7 @@
  * Benchmark content QA (offline, no DB):  npx tsx src/engine/benchmarks/validate.ts [domain-slug] [-v]
  *  - structural checks (counts, unique keys, skills, choices)
  *  - leakage check: knowledge-pack facts must not copy held-out prompts
- *  - simulation: the StringMind Sandbox Agent answers every item (a) with no knowledge and (b) with the
+ *  - simulation: the Hive Mind Sandbox Agent answers every item (a) with no knowledge and (b) with the
  *    domain knowledge pack retrieved the same way engine/context.ts does; graded by the evaluator.
  */
 import { DOMAINS } from '@aix/shared';
@@ -27,6 +27,7 @@ function simulate(q: BenchQuestion, facts: string[]) {
 const totals = { withPack: 0, without: 0, n: 0 };
 for (const d of DOMAINS) {
   if (only && d.slug !== only) continue;
+  if (d.quickAssessment === false) continue; // professional-evaluation-only domain
   const b = BENCHMARKS[d.slug];
   if (!b) { console.log(`✗ ${d.slug}: missing`); problems++; continue; }
   const all = [...b.heldOut, ...b.practice];

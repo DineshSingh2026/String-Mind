@@ -79,7 +79,7 @@ export function SignInForm() {
         </div>
       </Field>
       <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy} icon={busy ? undefined : <LogIn className="h-4 w-4" />}>Sign In</Button>
-      <p className="text-center text-sm text-fg-muted">New to StringMind? <Link href={`/register${next !== '/app' ? `?next=${encodeURIComponent(next)}` : ''}`} className="font-medium text-gold-soft hover:underline">Create an account</Link></p>
+      <p className="text-center text-sm text-fg-muted">New to Hive Mind? <Link href={`/register${next !== '/app' ? `?next=${encodeURIComponent(next)}` : ''}`} className="font-medium text-gold-soft hover:underline">Create an account</Link></p>
       <p className="text-center text-xs text-fg-subtle">Forgot your password? <Link href="/contact?topic=support" className="underline hover:text-fg-muted">Contact support</Link></p>
     </motion.form>
     )}

@@ -6,7 +6,7 @@ import { CodeTabs } from '@/components/site/CodeBlock';
 import { Arrow, FxCard, FxCta, FxHero, FxLink, FxSection } from '@/components/site/pages/kit';
 import { AnimatedTerminal } from '@/components/site/pages/docs';
 
-export const metadata: Metadata = { title: 'Developers', description: 'Build on StringMind: REST API, org-scoped API keys, signed webhooks and provider adapters.' };
+export const metadata: Metadata = { title: 'Developers', description: 'Build on Hive Mind: REST API, org-scoped API keys, signed webhooks and provider adapters.' };
 
 const curl = `curl -s "$AIX_API_URL/agents" \\
   -H "Authorization: Bearer $AIX_API_KEY"`;
@@ -26,7 +26,7 @@ const EVENTS = ['agent.connected', 'agent.health_failed', 'assessment.completed'
 export default function DevelopersPage() {
   return (
     <>
-      <FxHero eyebrow="Developers" title="Everything in StringMind," accent="via API." accentTone="ai" palette="ai"
+      <FxHero eyebrow="Developers" title="Everything in Hive Mind," accent="via API." accentTone="ai" palette="ai"
         description="Connect agents, run assessments, request training and react to events programmatically. Same permissions model as the app, scoped to your organisation."
         actions={<>
           <FxLink href="/docs" variant="ai">Read the docs <Arrow /></FxLink>

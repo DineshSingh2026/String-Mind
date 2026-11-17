@@ -27,7 +27,7 @@ export interface AgentPermissions {
 
 export interface Agent {
   id: string; slug?: string; name: string; description?: string | null; avatarUrl?: string | null;
-  status: AgentStatus; health?: 'healthy' | 'degraded' | 'down' | 'unknown' | string | null;
+  status: AgentStatus; /** set while the owner has paused the agent */ pausedAt?: string | null; health?: 'healthy' | 'degraded' | 'down' | 'unknown' | string | null;
   isPublic?: boolean; modelName?: string; modelVersion?: string | null; role?: string | null;
   instructions?: string | null; languages?: string[]; claimedDomains?: ClaimedDomain[]; tools?: string[];
   provider?: { slug: string; name: string };

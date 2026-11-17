@@ -1,15 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <defs>
-    <linearGradient id="g" x1="8" y1="6" x2="40" y2="42" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fbeec6"/><stop offset=".28" stop-color="#f0d696"/><stop offset=".6" stop-color="#d6af55"/><stop offset="1" stop-color="#a6802e"/>
-    </linearGradient>
-    <radialGradient id="n" cx=".38" cy=".35" r=".7">
-      <stop offset="0" stop-color="#fff8e2"/><stop offset=".55" stop-color="#f0d696"/><stop offset="1" stop-color="#c79a3f"/>
-    </radialGradient>
-  </defs>
-  <rect width="48" height="48" rx="12" fill="#0b0f18"/>
-  <g transform="translate(24 24) scale(1.06) translate(-24 -24)">
-    <path d="M38.85 9.15C32 5 15.2 7.2 15.6 16C16 21.8 32 26.2 32.4 32C33 40.8 16 43 9.15 38.85" fill="none" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="38.85" cy="9.15" r="3.6" fill="url(#n)"/><circle cx="24" cy="24" r="4" fill="url(#n)"/><circle cx="9.15" cy="38.85" r="3.6" fill="url(#n)"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+<defs><linearGradient id="g" x1="4" y1="6" x2="44" y2="42" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB547"/><stop offset="0.17" stop-color="#FF6B6B"/><stop offset="0.33" stop-color="#FF4FA3"/><stop offset="0.5" stop-color="#9B6BFF"/><stop offset="0.67" stop-color="#4C8DFF"/><stop offset="0.83" stop-color="#2ED3E6"/><stop offset="1" stop-color="#4BE39B"/></linearGradient>
+<filter id="gb" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2"/></filter><radialGradient id="bg" cx=".5" cy=".42" r=".7"><stop offset="0" stop-color="#1a1530"/><stop offset="1" stop-color="#06060c"/></radialGradient></defs>
+<rect width="48" height="48" rx="12" fill="url(#bg)"/>
+<g transform="translate(3.36 3.36) scale(0.86)"><polygon points="24,14 32.66,19 32.66,29 24,34 15.34,29 15.34,19" fill="url(#g)" opacity=".55" filter="url(#gb)"/>
+<polygon points="24,17.1 29.98,20.55 29.98,27.45 24,30.9 18.02,27.45 18.02,20.55" fill="url(#g)" fill-opacity="1"/>
+<polygon points="37.2,17.1 43.18,20.55 43.18,27.45 37.2,30.9 31.22,27.45 31.22,20.55" fill="url(#g)" fill-opacity="0.92"/>
+<polygon points="30.6,28.53 36.58,31.98 36.58,38.88 30.6,42.33 24.62,38.88 24.62,31.98" fill="url(#g)" fill-opacity="0.92"/>
+<polygon points="17.4,28.53 23.38,31.98 23.38,38.88 17.4,42.33 11.42,38.88 11.42,31.98" fill="url(#g)" fill-opacity="0.92"/>
+<polygon points="10.8,17.1 16.78,20.55 16.78,27.45 10.8,30.9 4.82,27.45 4.82,20.55" fill="url(#g)" fill-opacity="0.92"/>
+<polygon points="17.4,5.67 23.38,9.12 23.38,16.02 17.4,19.47 11.42,16.02 11.42,9.12" fill="url(#g)" fill-opacity="0.92"/>
+<polygon points="30.6,5.67 36.58,9.12 36.58,16.02 30.6,19.47 24.62,16.02 24.62,9.12" fill="url(#g)" fill-opacity="0.92"/>
+<polygon points="24,20.8 26.77,22.4 26.77,25.6 24,27.2 21.23,25.6 21.23,22.4" fill="#fff" fill-opacity=".85"/></g>
 </svg>

@@ -22,7 +22,7 @@ export function LiveStatsCard() {
       <div className="relative flex items-center justify-between">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-fg-muted">
           <span className={error ? 'h-2 w-2 rounded-full bg-fg-subtle' : 'h-2 w-2 animate-pulse-dot rounded-full bg-success'} aria-hidden />
-          Live on this StringMind instance
+          Live on this Hive Mind instance
         </p>
         <Activity aria-hidden className="h-4 w-4 text-electric" />
       </div>

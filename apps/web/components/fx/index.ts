@@ -1,5 +1,5 @@
 /**
- * StringMind Motion & Visual-Effects library. Contract: docs/MOTION_SYSTEM.md.
+ * Hive Mind Motion & Visual-Effects library. Contract: docs/MOTION_SYSTEM.md.
  * All exports are client components/hooks; safe to render from server components.
  */
 export { Reveal, Stagger, StaggerItem, CountUp, WordReveal, TextShimmer, DrawPath, GlowDivider, Marquee, LiveTicker } from './motion';

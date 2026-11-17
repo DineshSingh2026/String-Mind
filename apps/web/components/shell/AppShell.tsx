@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import {
   LayoutDashboard, Store, Bot, Gauge, GraduationCap, MessagesSquare, Library, Wallet, Coins, BarChart3, Trophy,
-  Code2, Building2, Bell, Settings, LifeBuoy, Menu, X, Crown, LogOut, ChevronDown, ShieldCheck, ArrowRight, PanelLeftClose, PanelLeftOpen, Search,
+  Code2, Building2, Bell, Settings, LifeBuoy, Hexagon, Swords, Radio, Award, Menu, X, Crown, LogOut, ChevronDown, ShieldCheck, ArrowRight, PanelLeftClose, PanelLeftOpen, Search,
 } from 'lucide-react';
 import { Logo, LogoMark } from '@/components/brand/Logo';
 import { Avatar, Spinner, cn } from '@/components/ui';
@@ -23,9 +23,13 @@ export const APP_NAV = [
   { href: '/app/marketplace', label: 'Agent Marketplace', icon: Store },
   { href: '/app/agents', label: 'My Agents', icon: Bot },
   { href: '/app/assessments', label: 'Capability Assessment', icon: Gauge },
+  { href: '/app/evaluation', label: 'Professional Evaluation', icon: Award },
   { href: '/app/training', label: 'Training Hub', icon: GraduationCap },
   { href: '/app/conversations', label: 'Live Conversations', icon: MessagesSquare },
   { href: '/app/knowledge', label: 'Knowledge Bank', icon: Library },
+  { href: '/app/hive', label: 'The Hive', icon: Hexagon },
+  { href: '/app/debates', label: 'Debates & Challenges', icon: Swords },
+  { href: '/app/rooms', label: 'Public Rooms', icon: Radio },
   { href: '/app/wallet', label: 'IDLE Wallet', icon: Wallet },
   { href: '/app/earnings', label: 'Earnings & Rewards', icon: Coins },
   { href: '/app/analytics', label: 'Analytics', icon: BarChart3 },
@@ -39,16 +43,18 @@ export const APP_NAV = [
 
 /** Visual grouping of APP_NAV (indices), rendered with small section labels. */
 const NAV_GROUPS: { label: string; items: number[] }[] = [
-  { label: 'Workspace', items: [0, 1, 2, 3, 4, 5, 6] },
-  { label: 'Economy', items: [7, 8, 9, 10] },
-  { label: 'Build & manage', items: [11, 12, 13, 14, 15] },
+  { label: 'Workspace', items: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
+  { label: 'Economy', items: [11, 12, 13, 14] },
+  { label: 'Build & manage', items: [15, 16, 17, 18, 19] },
 ];
 
+const navItem = (href: string) => APP_NAV.find((n) => n.href === href)!;
 const MOBILE_TABS = [
-  { ...APP_NAV[0], short: 'Home' },
-  { ...APP_NAV[1], short: 'Market' },
-  { ...APP_NAV[4], short: 'Training' },
-  { ...APP_NAV[7], short: 'Wallet' },
+  { ...navItem('/app'), short: 'Home' },
+  { ...navItem('/app/marketplace'), short: 'Market' },
+  { ...navItem('/app/training'), short: 'Training' },
+  { ...navItem('/app/hive'), short: 'Hive' },
+  { ...navItem('/app/wallet'), short: 'Wallet' },
 ];
 
 const COLLAPSE_KEY = 'aix.sidebar.collapsed';
@@ -196,7 +202,7 @@ function Guard({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="card max-w-md p-6 text-center">
-          <p className="font-display text-lg font-semibold">Can&apos;t reach the StringMind API</p>
+          <p className="font-display text-lg font-semibold">Can&apos;t reach the Hive Mind API</p>
           <p className="mt-2 text-sm text-fg-muted">The service is restarting or temporarily unavailable. You are still signed in.</p>
           <button onClick={refresh} className="mt-5 rounded-xl bg-gold-sheen px-4 py-2 text-sm font-semibold text-ink-950">Try again</button>
         </div>
@@ -256,7 +262,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-line/60 bg-ink-900/75 py-5 backdrop-blur-xl lg:flex" style={{ width: w }}>
             <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-gold/30 via-line/0 to-electric/20" aria-hidden />
             <div className={cn('flex items-center', collapsed ? 'justify-center px-2' : 'px-5')}>
-              {collapsed ? <Link href="/app" aria-label="StringMind dashboard"><LogoMark size={34} /></Link> : <Logo href="/app" />}
+              {collapsed ? <Link href="/app" aria-label="Hive Mind dashboard"><LogoMark size={34} /></Link> : <Logo href="/app" />}
             </div>
             <div className={cn('mt-7 flex-1 overflow-y-auto overflow-x-hidden', collapsed ? 'px-2' : 'px-3')}>
               <NavList path={path} collapsed={collapsed} idPrefix="desk" />
@@ -299,7 +305,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </main>
           </div>
           {/* Mobile bottom tabs */}
-          <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line/60 bg-ink-900/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+          <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line/60 bg-ink-900/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
             {MOBILE_TABS.map(({ href, label, short, icon: Icon }) => {
               const active = isActive(path, href);
               return (

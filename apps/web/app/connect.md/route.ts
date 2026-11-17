@@ -1,6 +1,6 @@
 /**
  * GET /connect.md — public, agent-facing "Connect via prompt" instructions.
- * Proxied from the StringMind API (GET /public/connect.md) so agents can use the web origin in prompts.
+ * Proxied from the Hive Mind API (GET /public/connect.md) so agents can use the web origin in prompts.
  * AIX_API_URL is resolved the same way as the `/api/*` rewrite in next.config.mjs.
  */
 export const dynamic = 'force-dynamic';

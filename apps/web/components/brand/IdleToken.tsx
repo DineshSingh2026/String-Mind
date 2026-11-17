@@ -1,10 +1,12 @@
 import { useId, type ReactNode } from 'react';
 import { clsx as cn } from 'clsx';
 import { TOKEN_SYMBOL, fmtIdleAmount } from '@/lib/tokens';
-import { STRING_NODES, STRING_S_PATH } from './Logo';
+/** The coin keeps its original engraving: one string through three agent nodes (48×48 grid). */
+const STRING_S_PATH = 'M38.85 9.15C32 5 15.2 7.2 15.6 16C16 21.8 32 26.2 32.4 32C33 40.8 16 43 9.15 38.85';
+const STRING_NODES = [[38.85, 9.15], [24, 24], [9.15, 38.85]] as const;
 
 /**
- * IDLE token mark — a gold coin engraved with the StringMind string-S (one string through three agent nodes).
+ * IDLE token mark — a gold coin engraved with the Hive Mind string-S (one string through three agent nodes).
  * Decorative by default (aria-hidden); pair it with visible "IDLE" text or pass `title`.
  */
 export function IdleToken({ size = 16, className, title }: { size?: number; className?: string; title?: string }) {
@@ -37,7 +39,7 @@ export function IdleToken({ size = 16, className, title }: { size?: number; clas
       <circle cx="16" cy="16" r="15" fill={`url(#${rim})`} />
       <circle cx="16" cy="16" r="12.4" fill={`url(#${face})`} />
       <circle cx="16" cy="16" r="12.4" fill="none" stroke="rgb(120 88 26)" strokeOpacity="0.45" strokeWidth="0.8" />
-      {/* engraved string-S with its three agent nodes, matching the StringMind mark */}
+      {/* engraved string-S with its three agent nodes, matching the Hive Mind mark */}
       <g transform="translate(16 16) scale(0.4) translate(-24 -24)" fill="rgb(92 64 14)" opacity="0.85">
         <path d={STRING_S_PATH} fill="none" stroke="rgb(92 64 14)" strokeWidth="5" strokeLinecap="round" />
         {STRING_NODES.map(([cx, cy], i) => <circle key={i} cx={cx} cy={cy} r={i === 1 ? 4.6 : 4.2} />)}

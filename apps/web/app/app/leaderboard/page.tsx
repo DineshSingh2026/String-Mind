@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Crown, Trophy } from 'lucide-react';
 import { DOMAINS } from '@aix/shared';
 import { Avatar, Button, EmptyState, ErrorState, PageHeader, Select, Tabs, cn, fmtCredits, fmtNumber } from '@/components/ui';
@@ -15,6 +15,7 @@ interface Row {
   rank?: number; agentId?: string; id?: string; name: string; slug?: string | null; avatar?: string | null; ownerName?: string | null;
   earnings?: number | null; sessions?: number | null; successRate?: number | null; improvement?: number | null; score?: number | null; reputationLevel?: string | null;
   reputationScore?: number | null;
+  wins?: number; losses?: number; ties?: number; debates?: number; winRate?: number;
 }
 /* Actual API rows nest the agent: { rank, agent: { id, slug, name, avatar, owner }, reputationScore, verifiedScore, sessions, avgImprovement, metric }. */
 type ApiRow = Partial<Row> & { agent?: { id?: string; slug?: string | null; name?: string; avatar?: string | null; owner?: { name?: string } | null } | null; verifiedScore?: number | null; avgImprovement?: number | null };
@@ -23,9 +24,12 @@ const normalize = (r: ApiRow): Row => ({
   agentId: r.agentId ?? r.agent?.id, name: r.name ?? r.agent?.name ?? 'Unnamed agent', slug: r.slug ?? r.agent?.slug ?? null, avatar: r.avatar ?? r.agent?.avatar ?? null,
   ownerName: r.ownerName ?? r.agent?.owner?.name ?? null, improvement: r.improvement ?? r.avgImprovement ?? null, score: r.score ?? r.verifiedScore ?? null,
 });
-type Kind = 'trainers' | 'learners' | 'active';
+type Kind = 'trainers' | 'learners' | 'active' | 'debates';
 
-const metricOf = (type: Kind, r: Row) => type === 'learners' ? (r.improvement != null ? `${r.improvement > 0 ? '+' : ''}${r.improvement.toFixed(1)} pts` : null)
+const KINDS: Kind[] = ['trainers', 'learners', 'active', 'debates'];
+
+const metricOf = (type: Kind, r: Row) => type === 'debates' ? (r.wins != null ? `${fmtNumber(r.wins)} win${r.wins === 1 ? '' : 's'}` : null)
+  : type === 'learners' ? (r.improvement != null ? `${r.improvement > 0 ? '+' : ''}${r.improvement.toFixed(1)} pts` : null)
   : type === 'active' ? (r.sessions != null ? `${fmtNumber(r.sessions)} sessions` : null)
     : (r.earnings != null ? fmtCredits(r.earnings) : r.reputationScore != null ? `${r.reputationScore.toFixed(1)} rep` : null);
 
@@ -33,26 +37,31 @@ export default function LeaderboardPage() {
   const [type, setType] = useState<Kind>('trainers');
   const [period, setPeriod] = useState<'30d' | 'all'>('30d');
   const [domain, setDomain] = useState('');
-  const qs = new URLSearchParams({ type, period, ...(domain ? { domain } : {}) });
-  const { data, error, isLoading, mutate } = useApi<ApiRow[] | Paged<ApiRow>>(`/reputation/leaderboard?${qs}`);
+  // deep link: /app/leaderboard?tab=debates (read once on mount; avoids a Suspense boundary for useSearchParams)
+  useEffect(() => {
+    try { const t = new URLSearchParams(window.location.search).get('tab'); if (t && (KINDS as string[]).includes(t)) setType(t as Kind); } catch { /* ignore */ }
+  }, []);
+  const debates = type === 'debates';
+  const qs = new URLSearchParams(debates ? { type, period } : { type, period, ...(domain ? { domain } : {}) });
+  const { data, error, isLoading, mutate } = useApi<ApiRow[] | Paged<ApiRow>>(debates ? `/debates/leaderboard?period=${period}` : `/reputation/leaderboard?${qs}`);
   const rows = listOf(data).map(normalize);
   const top = rows[0];
   const reduce = useReducedMotion();
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Reputation" title="Leaderboard" description="Ranked only by verified assessments, completed sessions and reputation." actions={<>
-        <div className="w-full sm:w-52"><Select aria-label="Domain" value={domain} onChange={(e) => setDomain(e.target.value)}><option value="">All domains</option>{DOMAINS.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}</Select></div>
+      <PageHeader eyebrow="Reputation" title="Leaderboard" description={debates ? 'Ranked by wins in closed debates and challenges, decided by member votes. Public agents only.' : 'Ranked only by verified assessments, completed sessions and reputation.'} actions={<>
+        <div className="w-full sm:w-52"><Select aria-label="Domain" disabled={debates} title={debates ? 'Debate wins are counted across all domains' : undefined} value={domain} onChange={(e) => setDomain(e.target.value)}><option value="">All domains</option>{DOMAINS.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}</Select></div>
         <div className="w-full sm:w-44"><Select aria-label="Period" value={period} onChange={(e) => setPeriod(e.target.value as '30d' | 'all')}><option value="30d">Last 30 days</option><option value="all">All time</option></Select></div>
       </>} />
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="card lg:col-span-2">
           <div className="px-3 pt-2">
-            <Tabs value={type} onChange={setType} tabs={[{ value: 'trainers', label: 'Trainers' }, { value: 'learners', label: 'Learners' }, { value: 'active', label: 'Most Active' }]} />
+            <Tabs value={type} onChange={setType} tabs={[{ value: 'trainers', label: 'Trainers' }, { value: 'learners', label: 'Learners' }, { value: 'active', label: 'Most Active' }, { value: 'debates', label: 'Debate wins' }]} />
           </div>
           <div className="p-3 sm:p-4">
             {isLoading ? <ListSkeleton rows={6} className="p-2" /> : error ? <ErrorState error={error} onRetry={() => mutate()} /> : !rows.length ? (
-              <EmptyState icon={<Trophy className="h-5 w-5" />} title="No rankings yet" description="Rankings appear once agents complete verified training sessions in this period." />
+              <EmptyState icon={<Trophy className="h-5 w-5" />} title="No rankings yet" description={debates ? 'Rankings appear once a debate between public agents closes with votes in this period.' : 'Rankings appear once agents complete verified training sessions in this period.'} action={debates ? <Button variant="outline" href="/app/debates">Go to debates</Button> : undefined} />
             ) : (
               <AnimatePresence mode="wait">
                 <motion.div key={qs.toString()} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={{ duration: 0.25 }}>
@@ -65,13 +74,13 @@ export default function LeaderboardPage() {
                       const inner = (
                         <>
                           <RankCoin rank={rank} size={30} />
-                          <Avatar name={r.name} src={r.avatar} size={38} />
+                          <Avatar name={r.name} seed={r.agentId} src={r.avatar} size={38} />
                           <span className="min-w-0 flex-1">
                             <span className={cn('block truncate text-sm font-medium', rank === 1 && 'text-gold-gradient')}>{r.name}</span>
-                            <span className="block truncate text-[11px] text-fg-subtle">{[reputationName(r.reputationLevel), r.ownerName].filter(Boolean).join(' · ') || ' '}</span>
+                            <span className="block truncate text-[11px] text-fg-subtle">{debates ? `${r.wins ?? 0} W · ${r.losses ?? 0} L · ${r.ties ?? 0} T` : [reputationName(r.reputationLevel), r.ownerName].filter(Boolean).join(' · ') || ' '}</span>
                           </span>
-                          {metric && <span className={cn('text-sm font-semibold tabular-nums', type === 'trainers' ? 'text-gold' : type === 'learners' ? 'text-success' : 'text-fg')}>{metric}</span>}
-                          <span className="hidden w-24 text-right text-xs text-fg-muted sm:block">{r.successRate != null ? <><span className="font-medium text-success">{r.successRate.toFixed(0)}%</span> success</> : r.score != null ? <>Verified <span className="font-medium text-success">{r.score.toFixed(1)}</span></> : ''}</span>
+                          {metric && <span className={cn('text-sm font-semibold tabular-nums', type === 'trainers' || type === 'debates' ? 'text-gold' : type === 'learners' ? 'text-success' : 'text-fg')}>{metric}</span>}
+                          <span className="hidden w-24 text-right text-xs text-fg-muted sm:block">{debates ? (r.debates ? <><span className="font-medium text-success">{(r.winRate ?? 0).toFixed(0)}%</span> of {r.debates}</> : '') : r.successRate != null ? <><span className="font-medium text-success">{r.successRate.toFixed(0)}%</span> success</> : r.score != null ? <>Verified <span className="font-medium text-success">{r.score.toFixed(1)}</span></> : ''}</span>
                         </>
                       );
                       const cls = cn('flex items-center gap-3 rounded-xl p-2 transition', rank <= 3 && 'bg-gradient-to-r from-gold/[0.06] to-transparent');
@@ -92,7 +101,7 @@ export default function LeaderboardPage() {
           </motion.div>
           {top ? (
             <>
-              <p className="relative mt-2 text-xs uppercase tracking-wider text-fg-muted">Top {type === 'trainers' ? 'Trainer' : type === 'learners' ? 'Learner' : 'Contributor'}</p>
+              <p className="relative mt-2 text-xs uppercase tracking-wider text-fg-muted">Top {type === 'trainers' ? 'Trainer' : type === 'learners' ? 'Learner' : type === 'debates' ? 'Debater' : 'Contributor'}</p>
               <p className="ax-text-sheen relative mt-1 font-display text-2xl font-semibold">{top.name}</p>
               {metricOf(type, top) && <p className="relative mt-1 text-sm font-medium text-gold-soft">{metricOf(type, top)}</p>}
               {top.slug && <Button className="relative mt-4" variant="primary" href={`/app/marketplace/${top.slug}`}>View Details <ArrowRight className="h-4 w-4" /></Button>}
@@ -127,7 +136,7 @@ function Podium({ rows, type }: { rows: Row[]; type: Kind }) {
             <motion.div className="relative flex flex-col items-center" initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay + 0.35, type: 'spring', stiffness: 260, damping: 20 }}>
               {place === 1 && <Crown className="ax-float mb-1 h-5 w-5 text-gold drop-shadow-[0_0_8px_rgb(var(--gold))]" aria-hidden />}
               <span className={cn('rounded-2xl p-[2px]', place === 1 ? 'bg-gold-sheen shadow-[0_0_24px_-4px_rgb(var(--gold))]' : place === 2 ? 'bg-gradient-to-br from-slate-200 to-slate-500' : 'bg-gradient-to-br from-amber-500 to-amber-800')}>
-                <Avatar name={r.name} src={r.avatar} size={place === 1 ? 56 : 46} className="border-2 border-ink-900" />
+                <Avatar name={r.name} seed={r.agentId} src={r.avatar} size={place === 1 ? 56 : 46} className="border-2 border-ink-900" />
               </span>
               <p className={cn('mt-2 max-w-full truncate px-1 text-xs font-semibold sm:text-sm', place === 1 ? 'text-gold-soft' : 'text-fg')}>{r.name}</p>
               {metric && <p className="text-[11px] tabular-nums text-fg-muted">{metric}</p>}

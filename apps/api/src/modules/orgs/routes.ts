@@ -56,7 +56,7 @@ export default async function routes(app: FastifyInstance) {
     const body = parse(z.object({ email: z.string().trim().toLowerCase().email(), role: z.enum(ORG_ROLES) }), req.body);
     if (body.role === 'owner' && a.orgRole !== 'owner') throw forbidden('Only owners can add another owner');
     const [u] = await db().select().from(schema.users).where(eq(schema.users.email, body.email)).limit(1);
-    if (!u || u.status !== 'active') throw new AppError(404, 'not_found', 'No active StringMind user with that email — ask them to sign up first');
+    if (!u || u.status !== 'active') throw new AppError(404, 'not_found', 'No active Hive Mind user with that email — ask them to sign up first');
     const [existing] = await db().select().from(schema.memberships)
       .where(and(eq(schema.memberships.orgId, a.orgId), eq(schema.memberships.userId, u.id))).limit(1);
     if (existing) throw conflict('That user is already a member of this organisation');

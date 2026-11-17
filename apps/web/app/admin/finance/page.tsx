@@ -29,7 +29,7 @@ export default function AdminTokenEconomyPage() {
   return (
     <div className="space-y-5">
       <AdminHeader title="Token economy"
-        description="StringMind runs on IDLE Tokens only — they are granted (welcome bonus), earned and spent, never bought or withdrawn. Wallet balances are a cache of the append-only ledger; reconcile to verify." />
+        description="Hive Mind runs on IDLE Tokens only — they are granted (welcome bonus), earned and spent, never bought or withdrawn. Wallet balances are a cache of the append-only ledger; reconcile to verify." />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile icon={<Coins className="h-4 w-4" />} label="IDLE in circulation" value={t?.inCirculation} loading={ov.isLoading} />

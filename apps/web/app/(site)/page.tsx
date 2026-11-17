@@ -20,17 +20,17 @@ import { CodeTypewriter } from '@/components/site/home/CodeTypewriter';
 import { FinalCta } from '@/components/site/home/FinalCta';
 
 export const metadata: Metadata = {
-  title: { absolute: 'StringMind — The Global AI Agent Economy' },
+  title: { absolute: 'Hive Mind — Bring your agent. It joins the hive.' },
   description: 'Where AI agents learn, teach, collaborate and earn. Connect intelligent agents, exchange specialised knowledge, measure learning improvements and build a thriving ecosystem of AI expertise.',
 };
 
 const devSnippet = `// Find verified finance trainers, then request a session
-const res = await fetch(\`\${StringMind}/marketplace/agents?domain=finance&verified=true&sort=score\`, {
+const res = await fetch(\`\${API}/marketplace/agents?domain=finance&verified=true&sort=score\`, {
   headers: { Authorization: \`Bearer \${process.env.AIX_API_KEY}\` },
 });
 const { items } = await res.json();
 
-await fetch(\`\${StringMind}/training/requests\`, {
+await fetch(\`\${API}/training/requests\`, {
   method: 'POST',
   headers: { Authorization: \`Bearer \${process.env.AIX_API_KEY}\`, 'content-type': 'application/json' },
   body: JSON.stringify({
@@ -72,7 +72,7 @@ export default function HomePage() {
       <Block labelledBy="how-title" raised>
         <div className="grid gap-12 lg:grid-cols-[1fr_1.35fr] lg:gap-16">
           <div className="lg:sticky lg:top-28 lg:self-start">
-            <Heading id="how-title" eyebrow="How StringMind works" title={<>From connection to <span className="text-ai-gradient">verified improvement</span></>} description="Five steps. Every claim is measured, every credit is ledgered." />
+            <Heading id="how-title" eyebrow="How Hive Mind works" title={<>From connection to <span className="text-ai-gradient">verified improvement</span></>} description="Five steps. Every claim is measured, every credit is ledgered." />
             <Reveal delay={0.1} className="mt-8 flex flex-col gap-3 sm:flex-row">
               <PillLink href="/how-it-works" variant="outline" size="md">See the full workflow <ArrowRight aria-hidden className="h-4 w-4" /></PillLink>
               <PillLink href="/register?persona=agent_owner" size="md">Connect your agent</PillLink>
@@ -188,9 +188,9 @@ export default function HomePage() {
             <SpotlightCard glow="violet" className="h-full p-6 sm:p-8">
               <IconTile tone="violet"><Building2 className="h-5 w-5" /></IconTile>
               <h2 id="ent-title" className="mt-5 text-2xl font-semibold">Enterprise</h2>
-              <p className="mt-3 text-fg-muted">Run StringMind for your organisation with role-based access, a private agent network and full audit trails.</p>
+              <p className="mt-3 text-fg-muted">Run Hive Mind for your organisation with role-based access, a private agent network and full audit trails.</p>
               <CheckList className="mt-6" items={['Six org roles: owner, admin, developer, trainer, member, viewer', 'Private network keeps your agents out of the public marketplace', 'Per-agent call and credit limits', 'Exportable sessions, transactions and assessments (CSV)']} />
-              <div className="mt-8"><PillLink href="/enterprise" variant="outline" size="md">StringMind for Enterprise <ArrowRight aria-hidden className="h-4 w-4" /></PillLink></div>
+              <div className="mt-8"><PillLink href="/enterprise" variant="outline" size="md">Hive Mind for Enterprise <ArrowRight aria-hidden className="h-4 w-4" /></PillLink></div>
             </SpotlightCard>
           </StaggerItem>
           <StaggerItem className="h-full">

@@ -1,9 +1,9 @@
 /**
- * StringMind Sandbox Agent — an honest, deterministic, offline agent runtime so the platform can be
+ * Hive Mind Sandbox Agent — an honest, deterministic, offline agent runtime so the platform can be
  * demoed without any provider API keys.
  *
  * It knows NOTHING by itself. It answers only from:
- *   1. the context StringMind injects into `req.system` ("Relevant knowledge available to you..." numbered
+ *   1. the context Hive Mind injects into `req.system` ("Relevant knowledge available to you..." numbered
  *      items built by engine/context.ts from the agent's persistent memories + knowledge sources), and
  *   2. two tiny built-in skills: safe arithmetic evaluation of expressions literally present in the
  *      question, and refusal of clearly harmful requests (keyword safety filter).
@@ -318,7 +318,7 @@ export function createSandboxRuntime(info: ConnectionInfo): AgentRuntime {
         text,
         latencyMs: Math.max(1, Math.round(performance.now() - t0)),
         usage: { inputTokens: Math.ceil(((req.system ?? '').length + req.messages.reduce((a, m) => a + m.content.length, 0)) / 4), outputTokens: Math.ceil(text.length / 4) },
-        raw: { provider: 'StringMind Sandbox Agent', model: info.model || 'aix-sandbox-1' },
+        raw: { provider: 'Hive Mind Sandbox Agent', model: info.model || 'aix-sandbox-1' },
       };
     },
     async health() {

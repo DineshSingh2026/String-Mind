@@ -167,7 +167,7 @@ export function FxCta({ title, description, primary, secondary, eyebrow }: {
 export { GlowDivider };
 
 /** Small "live" chip. */
-export function LiveChip({ children = 'Live on this StringMind instance', className }: { children?: ReactNode; className?: string }) {
+export function LiveChip({ children = 'Live on this Hive Mind instance', className }: { children?: ReactNode; className?: string }) {
   return (
     <span className={cx('inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-0.5 text-[11px] font-medium text-success-soft', className)}>
       <span aria-hidden className="relative flex h-1.5 w-1.5"><span className="aix-pulse-ring absolute inline-flex h-full w-full rounded-full bg-success" /><span className="relative h-1.5 w-1.5 rounded-full bg-success" /></span>

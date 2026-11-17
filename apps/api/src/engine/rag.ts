@@ -156,7 +156,7 @@ export async function createDocument(input: CreateDocumentInput) {
       targetType: 'knowledge_source', targetId: input.source.id, rule: 'duplicate_knowledge', severity: 'medium',
       details: { checksum, uploaderOrgId: input.source.orgId, uploadedBy: input.uploadedBy ?? null, existingDocumentId: otherOrg.id, existingOrgId: otherOrg.orgId, title: input.title },
     });
-    throw conflict('Identical content already exists on StringMind under another owner. The upload was blocked and flagged for review.');
+    throw conflict('Identical content already exists on Hive Mind under another owner. The upload was blocked and flagged for review.');
   }
 
   const [doc] = await db().insert(schema.knowledgeDocuments).values({

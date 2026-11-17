@@ -75,7 +75,7 @@ export async function attemptDelivery(deliveryId: string, opts: { scheduleRetry?
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'user-agent': 'StringMind-Webhooks/1.0',
+        'user-agent': 'Hive Mind-Webhooks/1.0',
         'x-aix-event': d.event,
         'x-aix-delivery': d.id,
         'x-aix-signature': signWebhook(decrypt(hook.secretEnc), body),

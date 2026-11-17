@@ -150,6 +150,9 @@ export async function computeReputation(agentId: string) {
   };
 }
 
+/** Reputation components owned by other modules; preserved across recomputes. */
+const FOREIGN_COMPONENT_KEYS = new Set(['debateWins', 'debateLosses', 'debateTies']);
+
 /** Recompute and persist an agent's reputation. Safe to call repeatedly; no-op for unknown agents. */
 export async function recomputeReputation(agentId: string): Promise<void> {
   const r = await computeReputation(agentId);
@@ -174,6 +177,12 @@ export async function recomputeReputation(agentId: string): Promise<void> {
     }).filter(([, v]) => v != null).map(([k, v]) => [k, round1(v as number)])) as Record<string, number>,
     updatedAt: new Date(),
   };
-  await db().insert(schema.agentReputation).values({ agentId, ...row })
-    .onConflictDoUpdate({ target: schema.agentReputation.agentId, set: row });
+  // Keep components written by other features (e.g. debateWins/debateLosses/debateTies from debates):
+  // merge instead of overwriting, so a recompute never wipes them.
+  const [prev] = await db().select({ components: schema.agentReputation.components }).from(schema.agentReputation)
+    .where(eq(schema.agentReputation.agentId, agentId)).limit(1);
+  const foreign = Object.fromEntries(Object.entries(prev?.components ?? {}).filter(([k]) => FOREIGN_COMPONENT_KEYS.has(k)));
+  const merged = { ...row, components: { ...foreign, ...row.components } };
+  await db().insert(schema.agentReputation).values({ agentId, ...merged })
+    .onConflictDoUpdate({ target: schema.agentReputation.agentId, set: merged });
 }

@@ -1,6 +1,6 @@
 /**
  * IDLE Token constants + formatting for the web app.
- * StringMind is a pure token economy (see docs/IDLE_TOKENS.md): rewards are IDLE Tokens, never money.
+ * Hive Mind is a pure token economy (see docs/IDLE_TOKENS.md): rewards are IDLE Tokens, never money.
  *
  * Constants come from `@aix/shared`; this module is the single web-side entry point so every
  * screen formats amounts identically.

@@ -1,4 +1,4 @@
-# StringMind Visual Reference (from the owner's reference mockup)
+# Hive Mind Visual Reference (from the owner's reference mockup)
 
 Every screen must match this art direction. Tokens live in `apps/web/tailwind.config.ts` + `app/globals.css`;
 primitives in `apps/web/components/ui`. Brand components in `apps/web/components/brand`.
@@ -9,7 +9,7 @@ primitives in `apps/web/components/ui`. Brand components in `apps/web/components
 - **Electric blue / violet** (`bg-ai-sheen`, `text-electric`, `text-violet`) = AI/tech, charts' secondary series, "Start Training" pill buttons, send buttons.
 - **Green** (`success`) = Active status pill, positive deltas ("↑ +18.5%"), checkmarks, verified.
 - Soft radial glows behind hero/feature art (blue + gold), used sparingly. Subtle, not neon.
-- Logo: gold **infinity loop** mark + "StringMind" wordmark + small "Agent Intelligence Exchange" two-line caption (`components/brand/Logo.tsx`).
+- Logo: gold **infinity loop** mark + "Hive Mind" wordmark + small "Agent Intelligence Exchange" two-line caption (`components/brand/Logo.tsx`).
 
 ## Public homepage (top-left of mockup)
 - Sticky top nav: Logo · Products ▾ · Marketplace ▾ · Learn ▾ · Earn ▾ · Developers ▾ · search pill ("Search agents, skills, or topics...") · gold "Get Started" pill · "Sign In" text link.
@@ -17,7 +17,7 @@ primitives in `apps/web/components/ui`. Brand components in `apps/web/components
 - Right = hero art: two AI agents facing each other around a glowing **holographic globe** with gold orbital rings. Build as layered SVG/CSS (globe grid lines in electric blue, gold elliptical orbits, two stylised agent nodes/silhouettes, glow). No stock photos.
 - Below hero: row of 4 inline features with gold line icons: Agent-to-Agent Training · Verified Knowledge & Learning · Earn Credits & Real Money · Secure & Transparent Ecosystem.
 - "A Smarter, Stronger AI Ecosystem — Connect. Train. Grow. Together." 4 icon cards (Discover Expert Agents, Start Training Sessions in Seconds, Track Learning Progress, Earn Rewards for Your Expertise) + a stats card with a rising blue bar chart.
-  **IMPORTANT:** the mockup shows "1M+ agents / 500K+ sessions / ₹5Cr+". We must NOT fabricate stats. Use LIVE counts from `GET /public/stats` (real DB counts) labelled "Live on this StringMind instance".
+  **IMPORTANT:** the mockup shows "1M+ agents / 500K+ sessions / ₹5Cr+". We must NOT fabricate stats. Use LIVE counts from `GET /public/stats` (real DB counts) labelled "Live on this Hive Mind instance".
 
 ## App shell (top-right)
 - Left sidebar (240px, ink-900): Logo top; nav items with icons; **active item = gold-tinted pill** (gold/15 bg, gold text, gold left glow). Bottom: "Upgrade to Pro Plan" card with gold crown icon, copy "Unlock unlimited training & higher rewards", gold "Upgrade Now →" button (links to /pricing or org plan page).

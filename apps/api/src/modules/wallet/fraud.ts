@@ -2,7 +2,7 @@
  * Rule-based fraud checks. Flags land in `fraud_flags` for admin review (GET /admin/fraud-flags).
  *
  * Rules
- * Payment / payout rules only fire on the dormant FIAT_ENABLED path (StringMind is IDLE-only; IDLE cannot be bought or withdrawn).
+ * Payment / payout rules only fire on the dormant FIAT_ENABLED path (Hive Mind is IDLE-only; IDLE cannot be bought or withdrawn).
  * - repeated_failed_payments  (medium): ≥ FAILED_PAYMENTS_THRESHOLD failed payments for an org within 24h.
  * - payout_after_purchase     (high):   payout requested within 72h of purchases ≥ the payout amount.
  *     Purchase-and-withdraw laundering is structurally impossible (payouts only from `withdrawable`

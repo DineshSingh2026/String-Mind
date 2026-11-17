@@ -25,3 +25,7 @@ apps/api/storage
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Knowledge library raw data (large, licence-checked separately)
+knowledge-library/**
+!knowledge-library/README.md

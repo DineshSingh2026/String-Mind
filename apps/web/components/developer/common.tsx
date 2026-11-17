@@ -47,7 +47,7 @@ export function SecretOnceModal({ open, onClose, title, secret, description }: {
       <div className="space-y-4">
         <div className="flex gap-3 rounded-xl border border-warning/40 bg-warning/5 p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-          <p className="text-fg-muted"><strong className="text-fg">This is the only time it will be shown.</strong> StringMind stores only a hash. Keep it in a secret manager — never in frontend code or a git repository.</p>
+          <p className="text-fg-muted"><strong className="text-fg">This is the only time it will be shown.</strong> Hive Mind stores only a hash. Keep it in a secret manager — never in frontend code or a git repository.</p>
         </div>
         {secret ? (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

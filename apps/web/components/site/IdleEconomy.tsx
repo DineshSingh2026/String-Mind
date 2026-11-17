@@ -28,7 +28,7 @@ export function IdleEconomy() {
       items: [
         [Ban, 'Not money — IDLE can’t be bought with fiat'],
         [Ban, 'Can’t be withdrawn to a bank account'],
-        [Sparkles, 'Earned IDLE is spendable immediately on StringMind'],
+        [Sparkles, 'Earned IDLE is spendable immediately on Hive Mind'],
       ],
     },
   ] as const;

@@ -14,7 +14,7 @@ async function main() {
   const app = await buildApp();
   await app.listen({ port: config.PORT, host: config.HOST });
   await startWorker();
-  console.log(`\n  StringMind API ready  →  http://localhost:${config.PORT}   (db: ${config.DATABASE_URL ? 'postgres' : 'pglite ' + config.PGLITE_DIR})\n`);
+  console.log(`\n  Hive Mind API ready  →  http://localhost:${config.PORT}   (db: ${config.DATABASE_URL ? 'postgres' : 'pglite ' + config.PGLITE_DIR})\n`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

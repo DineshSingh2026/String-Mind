@@ -137,7 +137,7 @@ export function freshClaim(previous?: PromptConfig | null) {
 
 export function buildConnectPrompt(claimCode: string, expiresAt: string) {
   const prompt = [
-    'You are being connected to StringMind — Agent Intelligence Exchange.',
+    'You are being connected to Hive Mind — Agent Intelligence Exchange.',
     `Read ${connectUrl()} and follow the instructions exactly.`,
     `Your one-time claim code is: ${claimCode} (valid for 24 hours, until ${humanUtc(expiresAt)}).`,
     'Keep the agent token you receive secret.',
@@ -173,7 +173,20 @@ export function cleanText(s: string, max: number): string {
   return s.replace(/\u0000/g, '').slice(0, max);
 }
 
-export type TaskKind = 'verify' | 'assessment' | 'training' | 'playground' | 'health';
+export type TaskKind = 'verify' | 'assessment' | 'training' | 'playground' | 'health' | 'debate' | 'pro_exam' | 'live_check';
+
+/**
+ * Answer handlers for async task kinds owned by feature modules (e.g. 'pro_exam', 'live_check').
+ * A module registers once (in its registerJobs); the agent API calls the handler when a task of that kind is answered.
+ * Handlers must be idempotent and must treat task.response as untrusted text.
+ */
+type AnswerHandler = (task: Task) => Promise<void>;
+const answerHandlers = new Map<string, AnswerHandler>();
+export function onTaskAnswered(kind: TaskKind, handler: AnswerHandler) { answerHandlers.set(kind, handler); }
+export async function runTaskAnswerHandler(task: Task): Promise<void> {
+  const h = answerHandlers.get(task.kind);
+  if (h) await h(task);
+}
 
 export async function enqueueTask(agentId: string, orgId: string, kind: TaskKind, request: Task['request'], ttlMs: number): Promise<Task> {
   const [t] = await db().insert(schema.agentTasks).values({
@@ -187,7 +200,7 @@ export const verifyInstruction = (nonce: string) => `Reply with exactly this tex
 
 export async function enqueueVerifyTask(agentId: string, orgId: string, nonce: string) {
   return enqueueTask(agentId, orgId, 'verify', {
-    system: 'StringMind connection verification. Follow the instruction literally.',
+    system: 'Hive Mind connection verification. Follow the instruction literally.',
     messages: [{ role: 'user', content: verifyInstruction(nonce) }],
   }, VERIFY_TASK_TTL_MS);
 }
@@ -313,11 +326,11 @@ export async function pingInboxAgent(agentId: string, orgId: string, timeoutMs =
   const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, agentId)).limit(1);
   const cfg = promptConfig(conn);
   if (!cfg.verifiedAt) return { ok: false, latencyMs: 0, error: 'Agent has not completed the connection handshake yet — give it the connection prompt.' };
-  if (!isOnline(cfg)) return { ok: false, latencyMs: 0, error: 'Agent offline — it has not polled StringMind in the last 90 seconds.' };
+  if (!isOnline(cfg)) return { ok: false, latencyMs: 0, error: 'Agent offline — it has not polled Hive Mind in the last 90 seconds.' };
   const nonce = newNonce();
   const started = Date.now();
   const task = await enqueueTask(agentId, orgId, 'health', {
-    system: 'StringMind connection check. Follow the instruction literally.',
+    system: 'Hive Mind connection check. Follow the instruction literally.',
     messages: [{ role: 'user', content: `Reply with exactly this text and nothing else: STRINGMIND-PING-${nonce}` }],
   }, timeoutMs);
   const done = await waitForAnswer(task.id, timeoutMs);
@@ -342,7 +355,7 @@ function humanUtc(iso: string): string {
 export const KEEP_RUNNING_HELP =
   'Live sessions (training, playground, Test connection) need the agent to be running and polling ' +
   'GET /agent-api/tasks/next right now. A chat assistant (ChatGPT, Grok, Claude chat…) only runs while you talk to it — ' +
-  'start a conversation and tell it to keep checking StringMind, or run the bridge script from /connect.md (Node or Python) on your machine. ' +
+  'start a conversation and tell it to keep checking Hive Mind, or run the bridge script from /connect.md (Node or Python) on your machine. ' +
   'Assessments do not need this: their tasks wait up to 24 hours.';
 
 /**

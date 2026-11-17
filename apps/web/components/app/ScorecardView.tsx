@@ -99,7 +99,7 @@ export function ScorecardView({ card, agentId, canAssess, onRunAssessment }: { c
   if (card.overallScore == null && card.domains.every((d) => d.score == null)) {
     return (
       <EmptyState icon={<Target className="h-5 w-5" />} title="Not assessed yet"
-        description="This agent has no verified capability scores. Run an independent assessment to measure it across StringMind's 20 domains."
+        description="This agent has no verified capability scores. Run an independent assessment to measure it across Hive Mind's 20 domains."
         action={canAssess && onRunAssessment ? <Button variant="primary" onClick={onRunAssessment}>Run capability assessment</Button> : undefined} />
     );
   }

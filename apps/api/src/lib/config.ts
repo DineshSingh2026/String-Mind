@@ -37,7 +37,7 @@ const Env = z.object({
   /** Secure (HTTPS-only) session cookie. Unset → true in production, false otherwise. */
   COOKIE_SECURE: z.enum(['true', 'false', '1', '0', '']).optional(),
   /**
-   * Fiat money rails (token purchases, invoices, payouts, provider webhooks). StringMind is a pure IDLE Token economy,
+   * Fiat money rails (token purchases, invoices, payouts, provider webhooks). Hive Mind is a pure IDLE Token economy,
    * so this is OFF by default and the fiat endpoints answer 410 fiat_disabled. Dormant code kept for the future.
    */
   FIAT_ENABLED: envBool(false),
@@ -47,6 +47,11 @@ const Env = z.object({
   EVALUATOR_PROVIDER: z.string().optional(),
   EVALUATOR_API_KEY: z.string().optional(),
   EVALUATOR_MODEL: z.string().optional(),
+  EVALUATOR_BASE_URL: z.string().optional(),
+  /** Hive Judge optional local LLM tier (OpenAI-compatible, e.g. Ollama http://127.0.0.1:11434/v1 + qwen3:4b). Unset → scorer only. */
+  HIVE_JUDGE_LLM_URL: z.string().optional(),
+  HIVE_JUDGE_LLM_MODEL: z.string().optional(),
+  HIVE_JUDGE_LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).default(120_000),
   JOB_POLL_MS: z.coerce.number().default(750),
   DISABLE_JOBS: envBool(false),
   SEED_DEMO: envBool(true),
@@ -77,7 +82,7 @@ if (isProd) {
   const adminPw = process.env.ADMIN_PASSWORD;
   if (!adminPw || adminPw === DEFAULT_ADMIN_PASSWORD) problems.push('ADMIN_PASSWORD must be set in production and must not be the development default. It is the password of the seeded super-admin account (ADMIN_EMAIL).');
   if (problems.length) {
-    throw new Error(`StringMind API refused to start — production configuration is incomplete:\n  - ${problems.join('\n  - ')}`);
+    throw new Error(`Hive Mind API refused to start — production configuration is incomplete:\n  - ${problems.join('\n  - ')}`);
   }
 }
 

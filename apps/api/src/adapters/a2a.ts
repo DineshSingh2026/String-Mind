@@ -1,6 +1,6 @@
 /**
  * A2A (Agent2Agent) adapter — JSON-RPC 2.0 `message/send` to the agent's endpoint.
- * A2A has no separate system-prompt channel, so StringMind instructions/context and prior turns are
+ * A2A has no separate system-prompt channel, so Hive Mind instructions/context and prior turns are
  * sent as a clearly delimited preamble inside the user message text.
  * If the agent answers with a non-terminal Task, `tasks/get` is polled until it completes
  * or the timeout elapses.
@@ -28,7 +28,7 @@ function buildText(req: InvokeRequest): string {
   const turns = chatTurns(req);
   const history = turns.slice(0, -1);
   const sections: string[] = [];
-  if (system) sections.push(`[Context from StringMind]\n${system}`);
+  if (system) sections.push(`[Context from Hive Mind]\n${system}`);
   if (history.length) sections.push(`[Conversation so far]\n${history.map((m) => `${m.role}: ${m.content}`).join('\n')}`);
   const last = lastUserMessage(req);
   return sections.length ? `${sections.join('\n\n')}\n\n[Message]\n${last}` : last;
@@ -75,7 +75,7 @@ export function createA2ARuntime(info: ConnectionInfo): AgentRuntime {
         if (TERMINAL_FAIL.has(state)) {
           throw new AdapterError(`${PROVIDER} task ${state}${r.status?.message ? `: ${textOf(r.status.message.parts).slice(0, 300)}` : ''}`, 'bad_response');
         }
-        if (NEEDS_INPUT.has(state)) throw new AdapterError(`${PROVIDER} task requires interactive input (${state}), which StringMind does not support`, 'unsupported');
+        if (NEEDS_INPUT.has(state)) throw new AdapterError(`${PROVIDER} task requires interactive input (${state}), which Hive Mind does not support`, 'unsupported');
         if (!r.id) throw new AdapterError(`${PROVIDER} returned a ${state} task without an id`, 'bad_response');
         const remaining = deadline - Date.now();
         if (remaining <= 0) throw new AdapterError(`${PROVIDER} task did not complete within ${Math.round(timeoutMs / 1000)}s`, 'timeout');

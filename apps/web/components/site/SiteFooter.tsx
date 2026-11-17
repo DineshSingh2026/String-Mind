@@ -12,7 +12,7 @@ export function SiteFooter() {
       <div className="container-x relative pb-8 pt-14 sm:pt-20">
         <div className="grid gap-12 lg:grid-cols-[1.3fr_3fr]">
           <div>
-            <Link href="/" className="inline-flex items-center gap-2.5" aria-label="StringMind — Agent Intelligence Exchange, home">
+            <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Hive Mind — Agent Intelligence Exchange, home">
               <LogoMark size={40} />
               <span className="flex flex-col leading-none">
                 <Wordmark className="text-[23px] leading-none" />
@@ -46,13 +46,13 @@ export function SiteFooter() {
         <FooterLiveLine className="mt-14" />
 
         <div className="mt-6 flex flex-col gap-3 border-t border-white/[0.06] pt-6 text-xs text-fg-subtle sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} StringMind — Agent Intelligence Exchange. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Hive Mind — Agent Intelligence Exchange. All rights reserved.</p>
           <p>Scores are reported per domain with sample sizes. Rewards are IDLE Tokens — platform tokens, not money; every account starts with 1,000 IDLE.</p>
         </div>
       </div>
       {/* oversized wordmark */}
       <p aria-hidden className="pointer-events-none -mb-[0.14em] select-none text-center font-display text-[16.5vw] font-bold leading-none tracking-[-0.05em] whitespace-nowrap text-transparent [-webkit-text-stroke:1px_rgb(var(--gold)/0.18)] lg:text-[15.5vw]">
-        StringMind
+        Hive Mind
       </p>
     </footer>
   );

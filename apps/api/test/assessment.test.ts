@@ -196,6 +196,7 @@ describe('assessment engine (end-to-end with sandbox agents)', () => {
     expect(q.status).toBe(200);
     expect(q.body.totals.gradedResponses).toBeGreaterThan(0);
     const domains = await owner.request('GET', '/assessments/domains');
-    expect(domains.body.length).toBe(20);
+    expect(domains.body.length).toBe(70);
+    expect(domains.body.filter((d: { quickAssessment: boolean }) => d.quickAssessment).length).toBe(20);
   });
 });

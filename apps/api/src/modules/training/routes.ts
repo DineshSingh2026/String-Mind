@@ -21,6 +21,7 @@ import {
   runRetentionCheck, runTrainingSession,
 } from '../../engine/training.js';
 import { escrowTraining, getCommissionBps } from '../wallet/ledger.js';
+import { assertAgentActive } from '../owner-controls/service.js';
 
 type Agent = typeof schema.agents.$inferSelect;
 type Session = typeof schema.trainingSessions.$inferSelect;
@@ -169,6 +170,9 @@ export default async function routes(app: FastifyInstance) {
     if (learner.status === 'suspended') throw badRequest('Learner agent is suspended');
     if (permOf(learner).allowLearning !== true) throw forbidden('Learner agent does not allow learning — enable "allowLearning" in its permissions');
     const trainer = await assertTrainerUsable(await getAgent(body.trainerAgentId), a.orgId);
+    // owner controls: paused / disconnected agents take no new training
+    await assertAgentActive(learner.id);
+    await assertAgentActive(trainer.id);
     const [domain] = await db().select().from(schema.capabilityDomains).where(eq(schema.capabilityDomains.slug, body.domainSlug)).limit(1);
     if (!domain) throw badRequest(`Unknown domain: ${body.domainSlug}`);
     const allowed = permOf(trainer).allowedDomains;
@@ -230,6 +234,8 @@ export default async function routes(app: FastifyInstance) {
     const r = await pendingRequest((req.params as { id: string }).id);
     if (r.trainerOrgId !== a.orgId) throw notFound('Training request');
     if (r.status !== 'pending') throw conflict(`Request is ${r.status}`);
+    await assertAgentActive(r.learnerAgentId);
+    await assertAgentActive(r.trainerAgentId);
     const session = await acceptRequest(r, a.user.id);
     await audit({ action: 'training.request.accept', targetType: 'training_request', targetId: r.id, metadata: { sessionId: session.id } }, req);
     const link = `/training/sessions/${session.id}`;
@@ -323,6 +329,8 @@ export default async function routes(app: FastifyInstance) {
     const a = requirePerm(req, 'training.participate');
     const s = await loadSessionForOrg((req.params as { id: string }).id, a.orgId, 'user');
     if (s.status !== 'scheduled') throw conflict(s.status === 'paused' ? 'Session is paused — use resume' : `Session is ${s.status}`);
+    await assertAgentActive(s.learnerAgentId);
+    await assertAgentActive(s.trainerAgentId);
     const now = new Date();
     const [u] = await db().update(schema.trainingSessions).set({ status: 'active', startedAt: now, updatedAt: now })
       .where(and(eq(schema.trainingSessions.id, s.id), eq(schema.trainingSessions.status, 'scheduled'))).returning();
@@ -351,6 +359,8 @@ export default async function routes(app: FastifyInstance) {
     const a = requirePerm(req, 'training.participate');
     const s = await loadSessionForOrg((req.params as { id: string }).id, a.orgId, 'user');
     if (s.status !== 'paused') throw conflict(`Session is ${s.status}`);
+    await assertAgentActive(s.learnerAgentId);
+    await assertAgentActive(s.trainerAgentId);
     const now = new Date();
     const pausedFor = s.pausedAt ? Math.round((now.getTime() - s.pausedAt.getTime()) / 1000) : 0;
     const [u] = await db().update(schema.trainingSessions).set({ status: 'active', pausedAt: null, updatedAt: now })

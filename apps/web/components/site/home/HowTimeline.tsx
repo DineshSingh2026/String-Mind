@@ -1,5 +1,5 @@
 'use client';
-/** Scroll-driven "How StringMind works" timeline: a gold path draws itself as the five steps come into view. */
+/** Scroll-driven "How Hive Mind works" timeline: a gold path draws itself as the five steps come into view. */
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { BadgeCheck, Coins, Gauge, GraduationCap, Plug } from 'lucide-react';

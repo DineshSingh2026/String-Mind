@@ -78,7 +78,7 @@ export function parseJson(text: string, provider: string): unknown {
   try { return JSON.parse(text); } catch { throw new AdapterError(`${provider} returned a non-JSON response`, 'bad_response'); }
 }
 
-/** Joins StringMind-injected system text with any system messages in the conversation. */
+/** Joins Hive Mind-injected system text with any system messages in the conversation. */
 export function systemText(req: InvokeRequest): string {
   return [req.system, ...req.messages.filter((m) => m.role === 'system').map((m) => m.content)]
     .filter((s): s is string => !!s && !!s.trim()).join('\n\n');
@@ -104,6 +104,6 @@ export function joinUrl(base: string, path: string): string {
 }
 
 export const HEALTH_PROMPT: InvokeRequest = {
-  messages: [{ role: 'user', content: 'Connection check from StringMind. Reply with the single word: OK' }],
+  messages: [{ role: 'user', content: 'Connection check from Hive Mind. Reply with the single word: OK' }],
   maxTokens: 32, purpose: 'health', timeoutMs: 20_000,
 };

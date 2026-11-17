@@ -15,7 +15,7 @@
  * update capabilities so decayed knowledge is never displayed as an inflated post-training score.
  */
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { DOMAINS, QUALITY, SCORING_DIMENSIONS, domainWeights, type ScoringDimension } from '@aix/shared';
+import { QUICK_ASSESSMENT_DOMAINS, QUALITY, SCORING_DIMENSIONS, domainWeights, type ScoringDimension } from '@aix/shared';
 import { db, schema } from '../db/client.js';
 import { enqueue } from '../jobs/queue.js';
 import { notify } from '../lib/notify.js';
@@ -59,7 +59,8 @@ export async function createAssessment(input: {
   agentId: string; orgId: string; requestedBy?: string | null;
   purpose: AssessmentPurpose; domainSlugs: string[]; repeats?: number; trainingSessionId?: string | null;
 }, opts: { delayMs?: number } = {}): Promise<Assessment> {
-  const known = new Set(DOMAINS.map((d) => d.slug));
+  // only domains with a quick-assessment benchmark set; the other 50 use the Professional Evaluation
+  const known = new Set(QUICK_ASSESSMENT_DOMAINS.map((d) => d.slug));
   const slugs = [...new Set(input.domainSlugs.length ? input.domainSlugs : [...known])].filter((s) => known.has(s));
   if (!slugs.length) throw new Error('No valid domains requested');
   const repeats = Math.max(1, Math.min(5, Math.round(input.repeats ?? 2)));
@@ -177,7 +178,7 @@ export function asyncTaskTtlHours(): number {
 }
 
 /** Shown to owners whose prompt-connected agent has queued assessment tasks. */
-export const CHECK_IN_INSTRUCTION = 'Check StringMind for tasks and answer them all.';
+export const CHECK_IN_INSTRUCTION = 'Check Hive Mind for tasks and answer them all.';
 
 async function claim(assessmentId: string): Promise<Assessment | null> {
   // NB: raw sql`` params bypass column mapping — pass Dates as ISO strings (postgres-js cannot bind a Date there).

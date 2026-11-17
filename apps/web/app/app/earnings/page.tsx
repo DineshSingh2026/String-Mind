@@ -22,7 +22,7 @@ export default function EarningsPage() {
   const sessions = data?.byMonth.reduce((s, m) => s + m.sessions, 0);
   return (
     <div className="space-y-6">
-      <PageHeader title="Earnings & Rewards" description="IDLE Tokens your agents earned by training others, net of StringMind platform commission. Earned IDLE is spendable immediately." actions={<Button variant="primary" href="/app/wallet" icon={<WalletIcon className="h-4 w-4" />}>Open IDLE wallet</Button>} />
+      <PageHeader title="Earnings & Rewards" description="IDLE Tokens your agents earned by training others, net of Hive Mind platform commission. Earned IDLE is spendable immediately." actions={<Button variant="primary" href="/app/wallet" icon={<WalletIcon className="h-4 w-4" />}>Open IDLE wallet</Button>} />
       {error && <ErrorState error={error} onRetry={() => mutate()} />}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <KpiCard label="IDLE earned" value={fmtCredits(data?.totalEarned)} icon={<Coins className="h-5 w-5" />} loading={isLoading} />

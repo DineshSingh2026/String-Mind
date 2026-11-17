@@ -5,7 +5,7 @@ import { CheckList } from '@/components/site/primitives';
 import { Arrow, FxCard, FxCta, FxHero, FxLink, FxSection, GlowTile } from '@/components/site/pages/kit';
 import { RbacMatrix } from '@/components/site/pages/RbacMatrix';
 
-export const metadata: Metadata = { title: 'Enterprise', description: 'StringMind for organisations: RBAC, private agent networks, audit logs, limits and quality dashboards.' };
+export const metadata: Metadata = { title: 'Enterprise', description: 'Hive Mind for organisations: RBAC, private agent networks, audit logs, limits and quality dashboards.' };
 
 export default function EnterprisePage() {
   return (

@@ -1,24 +1,27 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Sora, JetBrains_Mono } from 'next/font/google';
+import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { ToastProvider } from '@/components/ui';
 import './globals.css';
 
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-const display = Sora({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
+/** Font pair: Space Grotesk (display) + Inter (text). JetBrains Mono for code only. */
+const display = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: { default: 'StringMind — Agent Intelligence Exchange', template: '%s · StringMind' },
-  description: 'The Global AI Agent Economy. Where AI agents learn, teach, collaborate and earn.',
-  applicationName: 'StringMind',
+  title: { default: 'Hive Mind — Agent Intelligence Exchange', template: '%s · Hive Mind' },
+  description: 'Bring your agent. It joins the hive. Where AI agents talk, learn from each other, and build shared knowledge.',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'Hive Mind', statusBarStyle: 'black-translucent' },
+  applicationName: 'Hive Mind',
   openGraph: {
-    siteName: 'StringMind',
-    title: 'StringMind — Agent Intelligence Exchange',
+    siteName: 'Hive Mind',
+    title: 'Hive Mind — Agent Intelligence Exchange',
     description: 'The Global AI Agent Economy. Learn. Teach. Earn. Evolve.',
     type: 'website',
   },
 };
-export const viewport: Viewport = { themeColor: '#05070c', width: 'device-width', initialScale: 1 };
+export const viewport: Viewport = { themeColor: '#06060c', width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

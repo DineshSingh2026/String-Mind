@@ -149,8 +149,8 @@ export function DrawPath({ d, className, stroke, width = 2, viewBox = '0 0 100 1
         <defs>
           {/* userSpaceOnUse so straight (zero-width) paths still get the gradient */}
           <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1={vx} y1={vy} x2={vx + vw} y2={vy + vh}>
-            <stop offset="0" stopColor="rgb(240 214 150)" />
-            <stop offset="0.55" stopColor="rgb(214 175 85)" />
+            <stop offset="0" stopColor="rgb(255 214 150)" />
+            <stop offset="0.55" stopColor="rgb(255 181 71)" />
             <stop offset="1" stopColor="rgb(72 148 255)" />
           </linearGradient>
         </defs>

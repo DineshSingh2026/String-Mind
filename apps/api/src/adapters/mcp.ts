@@ -2,7 +2,7 @@
  * MCP (Model Context Protocol) server connection over Streamable HTTP.
  *
  * An MCP server is a TOOL server, not a conversational agent: it exposes tools/resources for a
- * model to call, but cannot itself answer a prompt. StringMind therefore supports MCP connections for
+ * model to call, but cannot itself answer a prompt. Hive Mind therefore supports MCP connections for
  * health/tool discovery only — `invoke` throws AdapterError('unsupported'). Assessments and
  * training require a chat-capable adapter.
  *

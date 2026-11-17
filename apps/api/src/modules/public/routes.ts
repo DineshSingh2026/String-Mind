@@ -31,8 +31,12 @@ export default async function routes(app: FastifyInstance) {
     const [domains] = await d.select({ n: sql<number>`count(*)::int` }).from(schema.capabilityDomains).where(eq(schema.capabilityDomains.active, true));
     const [kl] = await d.select({ n: sql<number>`count(*)::int` }).from(schema.knowledgeListings)
       .where(and(eq(schema.knowledgeListings.moderation, 'visible'), eq(schema.knowledgeListings.verificationStatus, 'verified'), eq(schema.knowledgeListings.status, 'active')));
+    // lessons = learning artefacts an owner approved into the hive (pending/rejected never count)
+    const [lessons] = await d.select({ n: sql<number>`count(*)::int` }).from(schema.learningArtefacts)
+      .where(inArray(schema.learningArtefacts.status, ['approved', 'applied']));
     return {
       agents: Number(agents?.n ?? 0),
+      lessons: Number(lessons?.n ?? 0),
       verifiedAgents: Number(verified?.n ?? 0),
       completedSessions: Number(sessions?.n ?? 0),
       /** active benchmark domains offered for assessment */
@@ -138,7 +142,7 @@ export default async function routes(app: FastifyInstance) {
       const outboxCount = async () => Number((await db().select({ n: sql<number>`count(*)::int` }).from(schema.emailOutbox).where(eq(schema.emailOutbox.to, a.email)))[0]?.n ?? 0);
       const before = await outboxCount();
       await notify(a.id, 'system', title, text.slice(0, 500), '/admin/contact');
-      if ((await outboxCount()) === before) await db().insert(schema.emailOutbox).values({ to: a.email, subject: `[StringMind] ${title}`, body: text });
+      if ((await outboxCount()) === before) await db().insert(schema.emailOutbox).values({ to: a.email, subject: `[Hive Mind] ${title}`, body: text });
     }
     await audit({ action: 'public.contact', targetType: 'contact_message', targetId: row!.id, actorType: 'system', metadata: { topic: body.topic } }, null);
     return reply.status(201).send({ id: row!.id, status: 'received' });

@@ -94,7 +94,7 @@ describe('IDLE welcome bonus', () => {
     expect(txs.body.items[0]).toMatchObject({ type: 'welcome_bonus', amount: 1000 });
 
     const notes = await asCookie(cookie, 'GET', '/notifications');
-    expect(JSON.stringify(notes.body)).toContain('Welcome to StringMind — 1,000 IDLE Tokens added');
+    expect(JSON.stringify(notes.body)).toContain('Welcome to Hive Mind — 1,000 IDLE Tokens added');
 
     expect((await app.inject({ method: 'POST', url: '/auth/logout', headers: { cookie } })).statusCode).toBe(204);
     const again = await login(email);
@@ -173,7 +173,7 @@ describe('fiat disabled by default (410)', () => {
     for (const [m, url, body] of calls) {
       const r = await u.request(m, url, body);
       expect(r.status, `${m} ${url}`).toBe(410);
-      expect(r.body.error).toMatchObject({ code: 'fiat_disabled', message: 'StringMind uses IDLE Tokens only — they cannot be bought or withdrawn.' });
+      expect(r.body.error).toMatchObject({ code: 'fiat_disabled', message: 'Hive Mind uses IDLE Tokens only — they cannot be bought or withdrawn.' });
     }
     const wh = await app.inject({ method: 'POST', url: '/wallet/webhooks/stripe', payload: '{}', headers: { 'content-type': 'application/json' } });
     expect(wh.statusCode).toBe(410);

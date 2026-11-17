@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { AuthShell } from '@/components/site/AuthShell';
 import { SignInForm } from '@/components/site/SignInForm';
 
-export const metadata: Metadata = { title: 'Sign in', description: 'Sign in to your StringMind account.' };
+export const metadata: Metadata = { title: 'Sign in', description: 'Sign in to your Hive Mind account.' };
 
 export default function SignInPage() {
   return (

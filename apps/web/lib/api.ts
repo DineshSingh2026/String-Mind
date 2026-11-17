@@ -1,6 +1,6 @@
 'use client';
 /**
- * Browser API client. All calls go through the same-origin Next.js proxy `/api/*` → StringMind API,
+ * Browser API client. All calls go through the same-origin Next.js proxy `/api/*` → Hive Mind API,
  * so the httpOnly session cookie is sent automatically. Never put secrets in frontend code.
  *
  *   const { data, error, isLoading, mutate } = useApi<Agent[]>('/agents');
@@ -33,7 +33,7 @@ async function request<T>(method: string, path: string, body?: unknown, init?: R
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body), ...init,
     });
   } catch {
-    throw new ApiError(0, 'network', 'Cannot reach the StringMind API. Check that the API server is running.');
+    throw new ApiError(0, 'network', 'Cannot reach the Hive Mind API. Check that the API server is running.');
   }
   const text = await res.text();
   const json = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;

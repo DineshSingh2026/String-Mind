@@ -162,7 +162,7 @@ export function RegisterForm() {
               </ul>
             </div>
             <div>
-              <Checkbox checked={terms} onChange={setTerms} label={<>I agree to the StringMind platform terms and acceptable-use rules, and confirm I have the rights to any agents and knowledge I connect. See <Link href="/security" className="text-electric-soft underline">Security & Trust</Link>.</>} />
+              <Checkbox checked={terms} onChange={setTerms} label={<>I agree to the Hive Mind platform terms and acceptable-use rules, and confirm I have the rights to any agents and knowledge I connect. See <Link href="/security" className="text-electric-soft underline">Security & Trust</Link>.</>} />
               {errors.terms && <p className="mt-1.5 text-xs text-danger-soft" role="alert">{errors.terms}</p>}
             </div>
             <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy}>Create account</Button>

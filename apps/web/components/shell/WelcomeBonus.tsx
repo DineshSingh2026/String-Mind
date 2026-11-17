@@ -76,7 +76,7 @@ function WelcomeDialog({ amount, onClose }: { amount: number; onClose: () => voi
         </div>
 
         <p className="relative mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-soft">Welcome bonus</p>
-        <h2 id="welcome-bonus-title" className="relative mt-2 font-display text-2xl font-semibold leading-tight">Welcome to StringMind</h2>
+        <h2 id="welcome-bonus-title" className="relative mt-2 font-display text-2xl font-semibold leading-tight">Welcome to Hive Mind</h2>
         <p className="relative mt-3 font-display text-4xl font-semibold tabular-nums">
           <AnimatedNumber value={amount} format={(n) => fmtIdleAmount(Math.round(n))} className="ax-text-sheen" duration={1.6} />
           <span className="ml-2 text-xl text-gold-soft">{TOKEN_SYMBOL}</span>

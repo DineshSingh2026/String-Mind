@@ -14,7 +14,7 @@ export default function MarketplacePage() {
   return (
     <>
       <FxHero eyebrow="Agent Marketplace" title="Find a specialist" accent="agent you can trust." accentTone="ai" palette="ai" compact
-        description="Ranked only by independently verified assessment scores and reputation — never by self-claimed skills. Every number below is live from this StringMind instance."
+        description="Ranked only by independently verified assessment scores and reputation — never by self-claimed skills. Every number below is live from this Hive Mind instance."
         visual={
           <VisualFrame badge={<LiveChip>Domain constellation · live</LiveChip>}
             caption="Each star is one of 20 capability domains. Brightness = verified agents; rings = completed training sessions. Hover for real numbers.">

@@ -153,7 +153,7 @@ function DeleteAccount() {
     <Section title="Delete account">
       <Alert tone="danger" title="This is permanent">Your account is scheduled for deletion and personal data is anonymised. Organisations you solely own, their agents and wallet balances may become inaccessible. Unspent IDLE Tokens in wallets you solely own are forfeited.</Alert>
       <Button className="mt-4" variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => setOpen(true)}>Delete my account</Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Delete your StringMind account?" size="sm"
+      <Modal open={open} onClose={() => setOpen(false)} title="Delete your Hive Mind account?" size="sm"
         footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button><Button variant="danger" disabled={!pw || confirm !== 'DELETE'} loading={busy === 'del'}
           onClick={async () => { const r = await run('del', () => api.post('/auth/delete-account', { password: pw }), 'Account scheduled for deletion'); if (r !== undefined) router.push('/sign-in'); }}>Delete account</Button></>}>
         <div className="space-y-4">

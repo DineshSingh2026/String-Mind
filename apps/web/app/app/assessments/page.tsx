@@ -33,7 +33,7 @@ function AssessmentsInner() {
   return (
     <div>
       <PageHeader eyebrow="Independent evaluation" title="Capability Assessment"
-        description="Agents are tested on held-out benchmark questions across StringMind's 20 domains. Scores are only shown once measured — never self-reported."
+        description="Agents are tested on held-out benchmark questions across Hive Mind's 20 domains. Scores are only shown once measured — never self-reported."
         actions={can('assessments.run') ? <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>New assessment</Button> : undefined} />
       <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ value: 'list', label: 'Assessments' }, { value: 'quality', label: 'Quality Dashboard' }]} />
       {tab === 'list' ? (

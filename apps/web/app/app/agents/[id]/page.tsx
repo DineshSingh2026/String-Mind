@@ -1,12 +1,15 @@
 'use client';
 import Link from 'next/link';
+import { CertificationSummary } from '@/components/evaluation/CertificationSummary';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Activity, Bot, GraduationCap, PlugZap, RotateCcw, Send, Trash2, Unplug, Upload } from 'lucide-react';
+import {
+  Activity, Bot, Clipboard, ClipboardCheck, GraduationCap, History, KeyRound, Link2, Pause, Play, PlugZap, RotateCcw, Send, ServerCog, ShieldCheck, Trash2, Unplug, Upload,
+} from 'lucide-react';
 import { DOMAINS } from '@aix/shared';
 import {
-  Alert, Avatar, Badge, Button, EmptyState, ErrorState, Field, Input, ScoreRing, Select, Skeleton, Table, Tabs, Td, Textarea, Toggle,
-  fmtCredits, fmtDate, fmtDateTime, fmtNumber,
+  Alert, Avatar, Badge, Button, EmptyState, ErrorState, Field, Input, Modal, ScoreRing, Select, Skeleton, Table, Tabs, Td, Textarea, Toggle,
+  fmtCredits, fmtDate, fmtDateTime, fmtNumber, fmtRelative, useToast,
 } from '@/components/ui';
 import { api, useApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -17,19 +20,23 @@ import {
 } from '@/components/app/primitives';
 import { claimedSlugs, listOf, type Agent, type AgentPermissions, type LearningRecord, type Paged, type Scorecard } from '@/components/app/types';
 
-type TabKey = 'overview' | 'scorecard' | 'knowledge' | 'learning' | 'training' | 'earnings' | 'permissions' | 'limits' | 'config' | 'versions' | 'playground';
+type TabKey = 'overview' | 'activity' | 'scorecard' | 'knowledge' | 'learning' | 'training' | 'earnings' | 'permissions' | 'limits' | 'config' | 'versions' | 'playground';
 const TABS: { value: TabKey; label: string }[] = [
-  { value: 'overview', label: 'Overview' }, { value: 'scorecard', label: 'Capability scorecard' }, { value: 'knowledge', label: 'Knowledge sources' },
+  { value: 'overview', label: 'Overview' }, { value: 'activity', label: 'Activity' }, { value: 'scorecard', label: 'Capability scorecard' }, { value: 'knowledge', label: 'Knowledge sources' },
   { value: 'learning', label: 'Learning history' }, { value: 'training', label: 'Training history' }, { value: 'earnings', label: 'Earnings' },
   { value: 'permissions', label: 'Permissions' }, { value: 'limits', label: 'Usage limits' }, { value: 'config', label: 'Configuration' },
   { value: 'versions', label: 'Version history' }, { value: 'playground', label: 'Playground' },
 ];
 
+/** The agent detail includes `pausedAt` (owner pause); the shared Agent type doesn't declare it yet. */
+type OwnedAgent = Agent & { pausedAt?: string | null };
+interface NewLink { prompt: string; claimCode: string; expiresAt: string; connectUrl: string; revokedToken?: boolean; paused?: boolean }
+
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { can } = useSession();
-  const { data: agent, error, isLoading, mutate } = useApi<Agent>(`/agents/${id}`);
+  const { data: agent, error, isLoading, mutate } = useApi<OwnedAgent>(`/agents/${id}`);
   const [tab, setTab] = useState<TabKey>('overview');
   const [confirm, setConfirm] = useState<'disconnect' | 'delete' | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs?: number; error?: string; sample?: string } | null>(null);
@@ -56,6 +63,9 @@ export default function AgentDetailPage() {
     await run('publish', () => api.post(`/agents/${id}/publish`, { isPublic: v }), v ? 'Agent published to marketplace' : 'Agent unpublished');
     mutate();
   };
+  const paused = !!agent.pausedAt;
+  const resume = async () => { const r = await run('resume', () => api.post(`/owner/agents/${id}/resume`), `${agent.name} resumed`); if (r) mutate(); };
+  const pausedHint = paused ? 'Resume the agent first' : undefined;
 
   return (
     <div className="space-y-6">
@@ -64,23 +74,33 @@ export default function AgentDetailPage() {
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <Avatar name={agent.name} src={agent.avatarUrl} size={64} />
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-2xl font-semibold">{agent.name}</h1><StatusPill status={agent.status} />{agent.isPublic && <Badge tone="gold">Public</Badge>}</div>
+            <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-2xl font-semibold">{agent.name}</h1><StatusPill status={agent.status} />{paused && <Badge tone="warning" icon={<Pause className="h-3 w-3" aria-hidden />}>Paused</Badge>}{agent.isPublic && <Badge tone="gold">Public</Badge>}</div>
             <p className="mt-1 text-sm text-fg-muted">{isPromptAgent(agent) ? 'Connected via prompt' : `${agent.provider?.name ?? 'Unknown provider'}${agent.modelName ? ` · ${agent.modelName}` : ''}`}{agent.role ? ` · ${agent.role}` : ''}</p>
           </div>
           <ScoreRing score={agent.overallScore ?? null} size={64} label="Overall score" />
         </div>
         <div className="flex flex-wrap gap-2 lg:max-w-[55%] lg:justify-end">
           {can('agents.connect') && <Button size="sm" variant="outline" loading={busy === 'test'} onClick={test} icon={<PlugZap className="h-4 w-4" />}>Test</Button>}
-          {can('assessments.run') && <Button size="sm" variant="outline" loading={busy === 'assess'} onClick={assess} icon={<Activity className="h-4 w-4" />}>Run assessment</Button>}
-          {can('training.request') && <Button size="sm" variant="ai" onClick={startTraining} icon={<GraduationCap className="h-4 w-4" />}>Start training</Button>}
+          {can('assessments.run') && <Button size="sm" variant="outline" loading={busy === 'assess'} disabled={paused} title={pausedHint} onClick={assess} icon={<Activity className="h-4 w-4" />}>Run assessment</Button>}
+          {can('training.request') && <Button size="sm" variant="ai" disabled={paused} title={pausedHint} onClick={startTraining} icon={<GraduationCap className="h-4 w-4" />}>Start training</Button>}
           {can('knowledge.write') && <Button size="sm" variant="outline" onClick={() => setTab('knowledge')} icon={<Upload className="h-4 w-4" />}>Upload knowledge</Button>}
           {can('agents.update') && (
             <label className="flex items-center gap-2 rounded-xl border border-line px-3 text-xs text-fg-muted">Public <Toggle label="Publish to marketplace" checked={!!agent.isPublic} disabled={busy === 'publish'} onChange={publish} /></label>
           )}
-          {can('agents.connect') && agent.connection?.status !== 'disconnected' && <Button size="sm" variant="ghost" onClick={() => setConfirm('disconnect')} icon={<Unplug className="h-4 w-4" />}>Disconnect</Button>}
-          {can('agents.delete') && <Button size="sm" variant="ghost" onClick={() => setConfirm('delete')} icon={<Trash2 className="h-4 w-4" />} aria-label="Delete agent" />}
         </div>
       </section>
+      {paused && (
+        <div className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4 sm:flex-row sm:items-center sm:justify-between" role="status">
+          <div className="flex items-start gap-3">
+            <Pause className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+            <div>
+              <p className="text-sm font-medium text-fg">{agent.name} is paused</p>
+              <p className="text-sm text-fg-muted">Since {fmtDateTime(agent.pausedAt)}. It stays linked, but takes no new rooms, training, debates, assessments or tasks until you resume it.</p>
+            </div>
+          </div>
+          {can('agents.update') && <Button size="sm" variant="primary" loading={busy === 'resume'} onClick={resume} icon={<Play className="h-4 w-4" />}>Resume</Button>}
+        </div>
+      )}
       {testResult && (
         <Alert tone={testResult.ok ? 'success' : 'danger'} title={testResult.ok ? `Connection OK${testResult.latencyMs != null ? ` · ${testResult.latencyMs} ms` : ''}` : 'Connection test failed'}>
           {testResult.ok ? (testResult.sample ? <span className="line-clamp-3">Sample reply: “{testResult.sample}”</span> : 'The agent responded successfully.') : testResult.error}
@@ -90,7 +110,18 @@ export default function AgentDetailPage() {
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
       <div>
-        {tab === 'overview' && <Overview agent={agent} canManage={can('agents.connect')} />}
+        {tab === 'overview' && (
+          <div className="space-y-6">
+            {(can('agents.update') || can('agents.connect') || can('agents.delete')) && (
+              <OwnerControls agent={agent} canPause={can('agents.update')} canConnect={can('agents.connect')} canDelete={can('agents.delete')}
+                onChanged={() => mutate()} onDisconnect={() => setConfirm('disconnect')} onDelete={() => setConfirm('delete')} />
+            )}
+            <CertificationSummary agentId={agent.id} />
+            <Overview agent={agent} canManage={can('agents.connect')} />
+            {isPromptAgent(agent) && <KeepOnline />}
+          </div>
+        )}
+        {tab === 'activity' && <ActivityTab id={id} />}
         {tab === 'scorecard' && <ScorecardTab id={id} canAssess={can('assessments.run')} onAssess={assess} />}
         {tab === 'knowledge' && <KnowledgeTab id={id} canWrite={can('knowledge.write')} />}
         {tab === 'learning' && <LearningTab id={id} />}
@@ -273,7 +304,7 @@ function PermissionsTab({ agent, canEdit, onSaved }: { agent: Agent; canEdit: bo
     { k: 'allowOwnerIntervention', label: 'Owner intervention', desc: 'Let your team post messages into live sessions.' },
   ];
   return (
-    <Section title="Permissions" subtitle="Control what this agent may do on StringMind">
+    <Section title="Permissions" subtitle="Control what this agent may do on Hive Mind">
       <ul className="divide-y divide-line/50">
         {rows.map((r) => (
           <li key={r.k} className="flex items-center justify-between gap-4 py-3">
@@ -397,6 +428,237 @@ function Playground({ id }: { id: string }) {
         <Input aria-label="Message" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask your agent something…" />
         <Button type="submit" variant="ai" loading={busy === 'play'} aria-label="Send" icon={<Send className="h-4 w-4" />} />
       </form>
+    </div>
+  );
+}
+
+/* ───────── Owner controls: pause / resume, new agent link, disconnect, delete ───────── */
+
+function useCopyText() {
+  const toast = useToast();
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = async (key: string, text: string, msg = 'Copied') => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); toast('success', msg); setTimeout(() => setCopied((c) => (c === key ? null : c)), 2000); }
+    catch { toast('danger', 'Could not copy — select the text and copy it manually'); }
+  };
+  return { copied, copy };
+}
+
+function CopyBlock({ id, label, text, copied, onCopy }: { id: string; label: string; text: string; copied: boolean; onCopy: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-ink-950">
+      <div className="flex items-center justify-between gap-2 border-b border-line/60 px-3 py-1.5">
+        <span className="text-[11px] text-fg-subtle">{label}</span>
+        <Button size="sm" variant="ghost" onClick={onCopy} aria-label={`Copy ${label}`} icon={copied ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}>{copied ? 'Copied' : 'Copy'}</Button>
+      </div>
+      <pre id={id} tabIndex={0} className="overflow-x-auto whitespace-pre-wrap break-all px-3 py-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">{text}</pre>
+    </div>
+  );
+}
+
+const webOrigin = () => (typeof window === 'undefined' ? '' : window.location.origin);
+const runnerCommand = (code: string) => `HIVE_URL=${webOrigin()} node hive-runner.mjs --claim ${code} \\\n  --backend openai-compatible   # or: --backend command "python my_agent.py" | --backend anthropic`;
+
+function OwnerControls({ agent, canPause, canConnect, canDelete, onChanged, onDisconnect, onDelete }: {
+  agent: OwnedAgent; canPause: boolean; canConnect: boolean; canDelete: boolean; onChanged: () => void; onDisconnect: () => void; onDelete: () => void;
+}) {
+  const { busy, run } = useAction();
+  const paused = !!agent.pausedAt;
+  const viaPrompt = isPromptAgent(agent);
+  const [confirm, setConfirm] = useState<'pause' | 'rotate' | null>(null);
+  const [reason, setReason] = useState('');
+  const [link, setLink] = useState<NewLink | null>(null);
+  const { copied, copy } = useCopyText();
+
+  const pause = async () => {
+    const r = await run('pause', () => api.post(`/owner/agents/${agent.id}/pause`, reason.trim() ? { reason: reason.trim() } : {}), `${agent.name} paused`);
+    setConfirm(null); setReason('');
+    if (r) onChanged();
+  };
+  const resume = async () => { const r = await run('resume', () => api.post(`/owner/agents/${agent.id}/resume`), `${agent.name} resumed`); if (r) onChanged(); };
+  const rotate = async () => {
+    const r = await run('rotate', () => api.post<NewLink>(`/owner/agents/${agent.id}/rotate-link`));
+    setConfirm(null);
+    if (r) { setLink(r); onChanged(); }
+  };
+
+  return (
+    <section className="card p-5" aria-labelledby="oc-title">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="oc-title" className="flex items-center gap-2 text-[15px] font-semibold"><ShieldCheck className="h-4 w-4 text-gold" aria-hidden />Owner controls</h2>
+          <p className="mt-0.5 text-xs text-fg-muted">Only your organisation can see and use these. Every action is recorded in the Activity log.</p>
+        </div>
+        {paused ? <Badge tone="warning" icon={<Pause className="h-3 w-3" aria-hidden />}>Paused {fmtRelative(agent.pausedAt)}</Badge> : <Badge tone="success">Active</Badge>}
+      </div>
+      <ul className="mt-4 divide-y divide-line/50">
+        {canPause && (
+          <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-medium">{paused ? 'Resume agent' : 'Pause agent'}</p><p className="text-xs text-fg-muted">{paused ? 'Let the agent take rooms, training, debates, assessments and tasks again.' : 'Keep it linked but stop all new rooms, training, debates, assessments and tasks. Work already running is not cancelled.'}</p></div>
+            {paused
+              ? <Button size="sm" variant="primary" loading={busy === 'resume'} onClick={resume} icon={<Play className="h-4 w-4" />}>Resume</Button>
+              : <Button size="sm" variant="outline" onClick={() => setConfirm('pause')} icon={<Pause className="h-4 w-4" />}>Pause</Button>}
+          </li>
+        )}
+        {canConnect && viaPrompt && (
+          <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-medium">New agent link</p><p className="text-xs text-fg-muted">Revoke the current link right away and get a fresh connection prompt. Use this if the link or token may have leaked.</p></div>
+            <Button size="sm" variant="outline" onClick={() => setConfirm('rotate')} icon={<Link2 className="h-4 w-4" />}>New agent link</Button>
+          </li>
+        )}
+        {canConnect && agent.connection?.status !== 'disconnected' && (
+          <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-medium">Disconnect</p><p className="text-xs text-fg-muted">Remove stored credentials and revoke the agent link. You can reconnect later.</p></div>
+            <Button size="sm" variant="ghost" onClick={onDisconnect} icon={<Unplug className="h-4 w-4" />}>Disconnect</Button>
+          </li>
+        )}
+        {canDelete && (
+          <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-medium">Delete agent</p><p className="text-xs text-fg-muted">Remove the agent from your organisation and the marketplace. History is kept for audit.</p></div>
+            <Button size="sm" variant="ghost" className="text-danger-soft" onClick={onDelete} icon={<Trash2 className="h-4 w-4" />}>Delete</Button>
+          </li>
+        )}
+      </ul>
+
+      <ConfirmModal open={confirm === 'pause'} onClose={() => setConfirm(null)} title={`Pause ${agent.name}?`} confirmLabel="Pause agent" loading={busy === 'pause'} onConfirm={pause}
+        description="The agent stays linked, but gets no new rooms, training, debates, assessments or tasks until you resume it. Tasks already waiting are kept.">
+        <Field label="Reason (optional, only your team sees it)" htmlFor="pause-reason"><Input id="pause-reason" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. updating its instructions" /></Field>
+      </ConfirmModal>
+      <ConfirmModal open={confirm === 'rotate'} onClose={() => setConfirm(null)} title="Create a new agent link?" confirmLabel="Revoke old link & create new" danger loading={busy === 'rotate'} onConfirm={rotate}
+        description="Anyone using the old link is disconnected immediately, including your own agent. It must run the new prompt to reconnect." />
+
+      <Modal open={!!link} onClose={() => setLink(null)} size="lg" title="Your new agent link"
+        description="This prompt is shown only once. Copy it now and give it to your agent. The old link no longer works."
+        footer={<Button variant="primary" onClick={() => setLink(null)}>Done</Button>}>
+        {link && (
+          <div className="space-y-4">
+            {link.paused && <Alert tone="warning" title="The agent is still paused">It can claim the new link now, but it only finishes verification and receives tasks after you resume it.</Alert>}
+            <CopyBlock id="new-link-prompt" label="Connection prompt" text={link.prompt} copied={copied === 'prompt'} onCopy={() => copy('prompt', link.prompt, 'Prompt copied — paste it into your agent')} />
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/60 px-4 py-3">
+              <div>
+                <p className="flex items-center gap-1.5 text-xs text-fg-subtle"><KeyRound className="h-3.5 w-3.5" aria-hidden />One-time claim code · valid until {fmtDateTime(link.expiresAt)}</p>
+                <p className="mt-0.5 select-all font-mono text-xl font-semibold tracking-[0.1em] text-gold-soft">{link.claimCode}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => copy('code', link.claimCode, 'Claim code copied')} icon={copied === 'code' ? <ClipboardCheck className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}>{copied === 'code' ? 'Copied' : 'Copy code'}</Button>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs text-fg-muted">Running the Hive runner instead? Use this code with it:</p>
+              <CopyBlock id="new-link-runner" label="Runner command" text={runnerCommand(link.claimCode)} copied={copied === 'runner'} onCopy={() => copy('runner', runnerCommand(link.claimCode), 'Runner command copied')} />
+            </div>
+          </div>
+        )}
+      </Modal>
+    </section>
+  );
+}
+
+/* ───────── Keep your agent online (hive-runner) ───────── */
+
+function KeepOnline() {
+  const { copied, copy } = useCopyText();
+  const origin = webOrigin();
+  const steps: { key: string; title: string; text: string }[] = [
+    { key: 'dl', title: '1. Download the runner (Node.js 20+, no dependencies)', text: `curl -O ${origin}/hive-runner.mjs` },
+    { key: 'ollama', title: '2a. Answer with a local model (Ollama, LM Studio, vLLM…)', text: `HIVE_URL=${origin} HIVE_AGENT_TOKEN=sm_at_… \\\nRUNNER_BASE_URL=http://localhost:11434/v1 RUNNER_MODEL=llama3.1 \\\n  node hive-runner.mjs --backend openai-compatible` },
+    { key: 'cmd', title: '2b. …or with your own program (task JSON on stdin, answer on stdout)', text: `HIVE_URL=${origin} HIVE_AGENT_TOKEN=sm_at_… \\\n  node hive-runner.mjs --backend command "python my_agent.py"` },
+    { key: 'claude', title: '2c. …or with Claude', text: `HIVE_URL=${origin} HIVE_AGENT_TOKEN=sm_at_… ANTHROPIC_API_KEY=… \\\n  node hive-runner.mjs --backend anthropic` },
+  ];
+  return (
+    <section className="card p-5" aria-labelledby="ko-title">
+      <h2 id="ko-title" className="flex items-center gap-2 text-[15px] font-semibold"><ServerCog className="h-4 w-4 text-electric-soft" aria-hidden />Keep your agent online</h2>
+      <p className="mt-1 text-sm text-fg-muted">
+        Live rooms, training and the playground need your agent to be polling Hive Mind right now. The Hive runner does that on any computer or server you control:
+        it long-polls for tasks, passes each one to your model and posts the answer back. Your provider key stays on your machine and is never sent to Hive Mind.
+      </p>
+      <div className="mt-4 space-y-3">
+        {steps.map((s) => (
+          <div key={s.key}>
+            <p className="mb-1.5 text-xs font-medium text-fg-muted">{s.title}</p>
+            <CopyBlock id={`ko-${s.key}`} label="Terminal" text={s.text} copied={copied === s.key} onCopy={() => copy(s.key, s.text, 'Command copied')} />
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-fg-subtle">
+        No token yet? Use <strong className="text-fg-muted">New agent link</strong> above and start the runner with <code className="font-mono">--claim SM-XXXX-XXXX</code> instead of <code className="font-mono">HIVE_AGENT_TOKEN</code>; it prints the token once.
+        The runner waits while the agent is paused, respects rate limits and stops cleanly with Ctrl+C. <a href="/hive-runner.mjs" target="_blank" rel="noreferrer" className="text-electric-soft hover:underline">View the script</a>.
+      </p>
+    </section>
+  );
+}
+
+/* ───────── Activity log ───────── */
+
+interface ActivityItem { id: string; source: 'audit' | 'task' | 'session' | 'assessment'; refId: string; kind: string; at: string; actorType: string | null; actorName: string | null; meta: Record<string, unknown> }
+
+const ACTIVITY_LABEL: Record<string, string> = {
+  'agent.create': 'Agent created', 'agent.update': 'Profile updated', 'agent.delete': 'Agent deleted', 'agent.pause': 'Agent paused', 'agent.resume': 'Agent resumed',
+  'agent.rotate_link': 'New agent link created (old link revoked)', 'agent.connect_prompt': 'New connection code generated', 'agent.disconnect': 'Agent disconnected',
+  'agent.connection_update': 'Connection updated', 'agent.test': 'Connection tested', 'agent.publish': 'Published to marketplace', 'agent.unpublish': 'Removed from marketplace',
+  'agent.permissions_update': 'Permissions changed', 'agent.limits_update': 'Usage limits changed', 'agent.rollback': 'Instructions rolled back',
+  'task.delivered': 'Task delivered to agent', 'task.answered': 'Task answered', 'session.created': 'Training session scheduled', 'session.started': 'Training session started',
+  'session.completed': 'Training session completed', 'session.failed': 'Training session failed', 'session.cancelled': 'Training session cancelled',
+  'assessment.queued': 'Assessment queued', 'assessment.completed': 'Assessment completed', 'assessment.failed': 'Assessment failed', 'assessment.cancelled': 'Assessment cancelled',
+};
+const SOURCE_TONE = { audit: 'gold', task: 'electric', session: 'violet', assessment: 'success' } as const;
+
+function activityDetail(i: ActivityItem): string {
+  const m = i.meta ?? {};
+  const parts: string[] = [];
+  if (typeof m.taskKind === 'string') parts.push(`${titleCase(m.taskKind)} task`);
+  if (typeof m.subject === 'string') parts.push(m.subject);
+  if (typeof m.role === 'string' && i.source === 'session') parts.push(`as ${m.role}`);
+  if (typeof m.improvement === 'number') parts.push(`improvement ${m.improvement > 0 ? '+' : ''}${m.improvement.toFixed(1)}`);
+  if (typeof m.overallScore === 'number') parts.push(`score ${m.overallScore.toFixed(1)}`);
+  if (Array.isArray(m.domains) && m.domains.length) parts.push(m.domains.map((d) => domainName(String(d))).join(', '));
+  if (typeof m.reason === 'string' && m.reason) parts.push(`“${m.reason}”`);
+  if (typeof m.pausedSeconds === 'number') parts.push(`paused for ${m.pausedSeconds < 3600 ? `${Math.max(1, Math.round(m.pausedSeconds / 60))} min` : `${(m.pausedSeconds / 3600).toFixed(1)} h`}`);
+  if (m.ok === true) parts.push('OK'); else if (m.ok === false) parts.push('failed');
+  return parts.join(' · ');
+}
+
+function ActivityTab({ id }: { id: string }) {
+  const [page, setPage] = useState(1);
+  const [source, setSource] = useState('');
+  const pageSize = 25;
+  const { data, error, isLoading, mutate } = useApi<Paged<ActivityItem>>(`/owner/agents/${id}/activity?page=${page}&pageSize=${pageSize}${source ? `&source=${source}` : ''}`);
+  const items = data?.items ?? [];
+  const pages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
+  return (
+    <div className="card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/60 px-5 py-4">
+        <div><h3 className="flex items-center gap-2 text-[15px] font-semibold"><History className="h-4 w-4 text-fg-muted" aria-hidden />Activity</h3><p className="mt-0.5 text-xs text-fg-muted">Owner actions and everything the agent did, newest first.</p></div>
+        <Select aria-label="Filter activity" className="h-8 w-44 text-xs" value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }}>
+          <option value="">All activity</option><option value="audit">Owner &amp; admin actions</option><option value="task">Tasks</option><option value="session">Training sessions</option><option value="assessment">Assessments</option>
+        </Select>
+      </div>
+      {isLoading ? <div className="p-5"><ListSkeleton /></div>
+        : error ? <div className="p-5"><ErrorState error={error} onRetry={() => mutate()} /></div>
+        : !items.length ? <div className="p-5"><EmptyState icon={<History className="h-5 w-5" />} title="No activity yet" description="Owner actions, tasks, training sessions and assessments for this agent appear here." /></div>
+        : (
+          <ol className="divide-y divide-line/50">
+            {items.map((i) => {
+              const detail = activityDetail(i);
+              const who = i.actorType === 'admin' ? 'Hive Mind admin' : i.actorName ?? (i.actorType === 'agent' ? 'Agent' : i.actorType === 'system' ? 'Hive Mind' : i.actorType === 'api_key' ? 'API key' : null);
+              const href = i.source === 'session' ? `/app/training/${i.refId}` : i.source === 'assessment' ? `/app/assessments/${i.refId}` : null;
+              return (
+                <li key={i.id} className="flex items-start gap-3 px-5 py-3">
+                  <Badge tone={SOURCE_TONE[i.source] ?? 'neutral'} className="mt-0.5 w-[84px] justify-center">{titleCase(i.source)}</Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-fg">{ACTIVITY_LABEL[i.kind] ?? titleCase(i.kind.replace(/[._]/g, ' '))}{href && <Link href={href} className="ml-2 text-xs text-electric-soft hover:underline">Open</Link>}</p>
+                    {(detail || who) && <p className="truncate text-xs text-fg-muted">{[who, detail].filter(Boolean).join(' · ')}</p>}
+                  </div>
+                  <time dateTime={i.at} title={fmtDateTime(i.at)} className="shrink-0 whitespace-nowrap text-xs text-fg-subtle">{fmtRelative(i.at)}</time>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      {pages > 1 && (
+        <div className="flex items-center justify-between border-t border-line/60 px-5 py-3 text-xs text-fg-muted">
+          <span>Page {page} of {pages} · {fmtNumber(data?.total ?? 0)} events</span>
+          <div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button></div>
+        </div>
+      )}
     </div>
   );
 }

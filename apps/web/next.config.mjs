@@ -1,5 +1,5 @@
 /**
- * AIX_API_URL — where the server-side `/api/*` proxy sends requests (the StringMind API).
+ * AIX_API_URL — where the server-side `/api/*` proxy sends requests (the Hive Mind API).
  *   IMPORTANT: rewrites are compiled at BUILD time (`next build`), so AIX_API_URL must be set in the
  *   environment of the build step (on Render: an env var of the web service — Render exposes env vars to builds).
  *   Accepts a full URL or a bare host: `stringmind-api.onrender.com` → https://…, `stringmind-api:10000`
@@ -48,6 +48,8 @@ if (process.env.NODE_ENV === 'production' && !process.env.AIX_API_URL) {
 export default {
   reactStrictMode: true,
   transpilePackages: ['@aix/shared'],
+  // /hive-runner.mjs reads the runner script from disk; include it in traced/standalone builds.
+  outputFileTracingIncludes: { '/hive-runner.mjs': ['../../tools/hive-runner/hive-runner.mjs'] },
   env: { NEXT_PUBLIC_WS_URL: WS, NEXT_PUBLIC_API_URL: PUBLIC_API },
   async rewrites() {
     // Same-origin API proxy so the httpOnly session cookie works without CORS.

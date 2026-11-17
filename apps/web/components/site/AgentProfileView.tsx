@@ -15,6 +15,10 @@ import { DomainIcon, domainName } from './DomainIcon';
 import { ScoreRingFx, scoreColor } from './pages/ScoreRingFx';
 import { cx } from './primitives';
 import { providerName, toItems, type AgentProfile, type Paged, type Review, type ScoreDomain } from './types';
+import { FollowButton } from '@/components/social/FollowButton';
+import { ProfileBadgeRow, ProfileExtras } from '@/components/social/ProfileExtras';
+import { CertificationBadges } from '@/components/evaluation/CertificationBadges';
+import { ReportButton } from '@/components/safety/ReportButton';
 
 type Avail = { status?: string; health?: string; acceptsTraining?: boolean; acceptsLearning?: boolean; lastHealthCheckAt?: string };
 type Listing = NonNullable<AgentProfile['listings']>[number] & { domainName?: string; settlementMode?: string; skills?: string[] };
@@ -183,7 +187,7 @@ export function AgentProfileView({ slug }: { slug: string }) {
             <motion.div initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} className="relative w-fit">
               <span aria-hidden className="aix-pulse-ring absolute -inset-2 rounded-[32px] border border-electric/40" />
               <span aria-hidden className="absolute -inset-3 rounded-[34px] bg-gradient-to-br from-electric/30 via-violet/20 to-gold/25 blur-xl" />
-              <Avatar name={a.name} src={a.avatar} size={112} className="relative rounded-[28px] ring-1 ring-white/15" />
+              <Avatar name={a.name} seed={a.id} src={a.avatar} size={112} className="relative rounded-[28px] ring-1 ring-white/15" />
             </motion.div>
             <div className="min-w-0 flex-1">
               <motion.div initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
@@ -194,6 +198,8 @@ export function AgentProfileView({ slug }: { slug: string }) {
                 </div>
                 <h1 className="mt-3 text-4xl font-semibold tracking-[-0.02em] sm:text-5xl">{a.name}</h1>
                 {a.description && <p className="mt-3 max-w-2xl text-fg-muted sm:text-lg">{a.description}</p>}
+                <ProfileBadgeRow slug={a.slug ?? slug} className="mt-4" />
+                <CertificationBadges slug={a.slug ?? slug} className="mt-2" />
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-fg-muted">
                   {providerName(a.provider) && <span className="inline-flex items-center gap-1.5"><Cpu aria-hidden className="h-4 w-4 text-fg-subtle" />{providerName(a.provider)}{a.modelName ? ` · ${a.modelName}` : ''}</span>}
                   {a.owner?.name && <span>by <span className="text-fg">{a.owner.name}</span></span>}
@@ -208,6 +214,10 @@ export function AgentProfileView({ slug }: { slug: string }) {
                 <div className="text-xs leading-relaxed text-fg-subtle">Overall<br />verified score{a.scorecard?.lastAssessedAt && <><br />Assessed {fmtDate(a.scorecard.lastAssessedAt)}</>}</div>
               </div>
               <Button variant="ai" size="lg" href={requestHref} icon={<GraduationCap className="h-4 w-4" />} className="shrink-0 rounded-2xl">Request training</Button>
+              <div className="flex items-center gap-2">
+                <FollowButton targetType="agent" targetId={a.id} className="flex-1" />
+                <ReportButton targetType="agent" targetId={a.id} label="Report this agent" className="btn-ghost h-10 !px-3" />
+              </div>
             </motion.div>
           </div>
 
@@ -238,6 +248,8 @@ export function AgentProfileView({ slug }: { slug: string }) {
               {a.scorecard?.testsCompleted ? <p className="mt-4 text-xs text-fg-subtle">{fmtNumber(a.scorecard.testsCompleted)} tests completed</p> : null}
             </Panel>
           </Reveal>
+
+          <ProfileExtras slug={a.slug ?? slug} roomHref={(id) => `/rooms/${id}`} />
 
           <Reveal>
             <Panel title="Training listings" icon={<GraduationCap className="h-4 w-4" />} subtitle="Prices in IDLE Tokens. IDLE is escrowed when the trainer accepts.">

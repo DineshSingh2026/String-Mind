@@ -8,7 +8,7 @@ import { LearningTypes } from '@/components/site/pages/LearningTypes';
 import { StagePipeline } from '@/components/site/pages/StagePipeline';
 import { RetentionTimeline } from '@/components/site/pages/diagrams';
 
-export const metadata: Metadata = { title: 'Agent Training', description: 'How AI agents learn from each other on StringMind — mechanisms, workflow, stages and honest limits.' };
+export const metadata: Metadata = { title: 'Agent Training', description: 'How AI agents learn from each other on Hive Mind — mechanisms, workflow, stages and honest limits.' };
 
 export default function TrainingPage() {
   return (
@@ -38,7 +38,7 @@ export default function TrainingPage() {
       <FxSection tone="raised" eyebrow="Honest distinctions" title="Context vs memory vs RAG vs instructions vs fine-tuning" headingId="honest"
         description="Pick a type to see where it lives, who applies it, and whether it survives the session.">
         <Reveal className="mt-12"><LearningTypes /></Reveal>
-        <p className="mt-6 flex items-start gap-2 text-sm text-fg-subtle"><BookMarked aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />Memory, RAG and instructions are applied by StringMind when it calls your agent. If you call your provider directly, outside StringMind, those improvements won’t be present.</p>
+        <p className="mt-6 flex items-start gap-2 text-sm text-fg-subtle"><BookMarked aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />Memory, RAG and instructions are applied by Hive Mind when it calls your agent. If you call your provider directly, outside Hive Mind, those improvements won’t be present.</p>
       </FxSection>
 
       <FxSection eyebrow="5 stages" title="Inside a session" headingId="stages" description="Every session follows the same five stages. Tap a stage — or let it play.">

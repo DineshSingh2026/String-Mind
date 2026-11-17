@@ -1,5 +1,5 @@
 /**
- * StringMind independent evaluator `aix-ground-truth-v1`.
+ * Hive Mind independent evaluator `aix-ground-truth-v1`.
  *
  * Grades an agent's response against benchmark ground truth. The evaluator is never the agent
  * being graded and never the trainer. Grading is deterministic by answerType; an optional LLM
@@ -38,7 +38,7 @@ export interface GradeResult {
   normalizedAnswer: string;
 }
 
-/** The exact prompt StringMind sends to an agent for a benchmark item (choices formatted A–D). */
+/** The exact prompt Hive Mind sends to an agent for a benchmark item (choices formatted A–D). */
 export function formatQuestionPrompt(q: { prompt: string; choices?: string[] | null }): string {
   const opts = q.choices?.length ? `\n\nOptions:\n${q.choices.map((c, i) => `${'ABCDEFGH'[i]}) ${c}`).join('\n')}` : '';
   return `${q.prompt}${opts}\n\nAnswer concisely.`;

@@ -1,72 +1,58 @@
 import { useId } from 'react';
 import Link from 'next/link';
 import { clsx as cn } from 'clsx';
+import { HIVE_SPECTRUM, hexPoints, honeycomb } from './hex';
 
 /**
- * StringMind mark: one continuous string drawn as an S that runs through three agent nodes
- * (learn · teach · earn) and leaves through an open ring, the "mind". The two ends sit in the
- * ring's openings and the centre node glows where the knowledge passes through.
- * Geometry is on a 48×48 grid and is shared with app/icon.svg and the IDLE token coin.
+ * Hive Mind mark: seven hive cells cut from one shifting colour gradient. Each cell is an agent with
+ * its own colour; together they form the hive. The gradient slowly shifts hue (motion-safe only).
+ * Geometry is on a 48×48 grid and is shared with app/icon.svg, the app icons and the OG image.
  */
-export const STRING_S_PATH = 'M38.85 9.15C32 5 15.2 7.2 15.6 16C16 21.8 32 26.2 32.4 32C33 40.8 16 43 9.15 38.85';
-export const STRING_NODES = [[38.85, 9.15], [24, 24], [9.15, 38.85]] as const;
+export const HIVE_CELLS = honeycomb(24, 24, 13.2);
+export const HIVE_CELL_R = 6.9;
 
-/** Open ring arcs (r=21) with 15° gaps where the string ends exit. */
-const RING_PATH = 'M42.19 13.5A21 21 0 0 1 13.5 42.19M5.81 34.5A21 21 0 0 1 34.5 5.81';
-
-export function LogoMark({ size = 36, className, animate = false, tone = 'gold' }: {
+export function LogoMark({ size = 36, className, animate = false, tone = 'color' }: {
   size?: number; className?: string;
-  /** draw the string in once on mount (skipped under prefers-reduced-motion) */
+  /** cells pop in one by one on mount (skipped under prefers-reduced-motion) */
   animate?: boolean;
   /** 'mono' renders a flat single-colour mark using currentColor */
-  tone?: 'gold' | 'mono';
+  tone?: 'color' | 'mono';
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const gold = `sm-gold-${uid}`, node = `sm-node-${uid}`, glow = `sm-glow-${uid}`;
+  const grad = `hm-grad-${uid}`, glow = `hm-glow-${uid}`;
   const mono = tone === 'mono';
-  const ink = mono ? 'currentColor' : `url(#${gold})`;
-  const dot = mono ? 'currentColor' : `url(#${node})`;
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" className={cn('shrink-0', animate && 'sm-mark-draw', className)} aria-hidden fill="none">
+    <svg width={size} height={size} viewBox="0 0 48 48" className={cn('shrink-0', !mono && 'hm-hue-shift', animate && 'hm-mark-pop', className)} aria-hidden fill="none">
       {!mono && (
         <defs>
-          <linearGradient id={gold} x1="8" y1="6" x2="40" y2="42" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgb(251 238 198)" />
-            <stop offset="0.28" stopColor="rgb(240 214 150)" />
-            <stop offset="0.6" stopColor="rgb(214 175 85)" />
-            <stop offset="1" stopColor="rgb(166 128 46)" />
+          <linearGradient id={grad} x1="4" y1="6" x2="44" y2="42" gradientUnits="userSpaceOnUse">
+            {HIVE_SPECTRUM.map((c, i) => <stop key={c} offset={i / (HIVE_SPECTRUM.length - 1)} stopColor={c} />)}
           </linearGradient>
-          <radialGradient id={node} cx="0.38" cy="0.35" r="0.7">
-            <stop offset="0" stopColor="rgb(255 248 226)" />
-            <stop offset="0.55" stopColor="rgb(240 214 150)" />
-            <stop offset="1" stopColor="rgb(199 154 63)" />
-          </radialGradient>
-          <filter id={glow} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" /></filter>
+          <filter id={glow} x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" /></filter>
         </defs>
       )}
-      {!mono && <circle cx="24" cy="24" r="4.6" fill="rgb(240 214 150)" opacity="0.55" filter={`url(#${glow})`} className="sm-mark-node" style={{ animationDelay: "0.43s" }} />}
-      <path d={RING_PATH} stroke={ink} strokeOpacity={mono ? 0.5 : 0.45} strokeWidth="1.2" strokeLinecap="round" className="sm-mark-ring" />
-      <path d={STRING_S_PATH} stroke={ink} strokeWidth="3.6" strokeLinecap="round" pathLength={1} className="sm-mark-string" />
-      {!mono && <path d={STRING_S_PATH} stroke="rgb(255 248 226)" strokeOpacity="0.35" strokeWidth="0.9" strokeLinecap="round" transform="translate(-0.5 -0.6)" pathLength={1} className="sm-mark-string" />}
-      {STRING_NODES.map(([cx, cy], i) => (
-        <circle key={i} cx={cx} cy={cy} r={i === 1 ? 3.6 : 3.1} fill={dot} className="sm-mark-node" style={{ animationDelay: `${0.15 + i * 0.28}s` }} />
+      {!mono && <polygon points={hexPoints(24, 24, 10)} fill={`url(#${grad})`} opacity="0.55" filter={`url(#${glow})`} />}
+      {HIVE_CELLS.map(([x, y], i) => (
+        <polygon key={i} points={hexPoints(x, y, HIVE_CELL_R)} fill={mono ? 'currentColor' : `url(#${grad})`}
+          fillOpacity={i === 0 ? 1 : 0.92} className="hm-cell" style={{ animationDelay: `${0.08 + i * 0.07}s` }} />
       ))}
+      {!mono && <polygon points={hexPoints(24, 24, 3.2)} fill="white" fillOpacity="0.85" className="hm-cell" style={{ animationDelay: '0.6s' }} />}
     </svg>
   );
 }
 
-/** "String" + gold "Mind" wordmark. */
+/** "Hive" + spectrum "Mind" wordmark. */
 export function Wordmark({ className }: { className?: string }) {
   return (
     <span className={cn('whitespace-nowrap font-display font-bold tracking-[-0.02em]', className)}>
-      <span className="text-fg">String</span><span className="text-gold-gradient">Mind</span>
+      <span className="text-fg">Hive</span><span className="text-gold-gradient">Mind</span>
     </span>
   );
 }
 
 export function Logo({ href = '/', compact, className }: { href?: string; compact?: boolean; className?: string }) {
   return (
-    <Link href={href} className={cn('flex items-center gap-2.5', className)} aria-label="StringMind — Agent Intelligence Exchange, home">
+    <Link href={href} className={cn('flex items-center gap-2.5', className)} aria-label="Hive Mind — Agent Intelligence Exchange, home">
       <LogoMark animate />
       <span className="flex flex-col leading-none">
         <Wordmark className="text-[21px] leading-none" />

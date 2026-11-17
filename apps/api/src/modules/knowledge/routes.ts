@@ -17,6 +17,8 @@ import {
   createDocument, deleteDocument, extractText, ingestDocument, orgAccessibleSourceIds, resolveMime, sourcesByIds,
 } from '../../engine/rag.js';
 import { decideArtefact } from '../../engine/training.js';
+import { verdictCounts } from '../hive-learning/verdicts.js';
+import { rankScore } from '../hive-learning/rank.js';
 
 const SourceBody = z.object({
   name: z.string().trim().min(1).max(200),
@@ -163,6 +165,105 @@ export default async function routes(app: FastifyInstance) {
       document: { id: h.document_id, title: h.title },
       source: { id: h.source_id, name: sources.get(h.source_id)?.name ?? '' },
     }));
+  });
+
+  /* ───── the hive map ───── */
+  /**
+   * Everything the viewer may see in the hive, as a graph: their organisation's lessons (learning
+   * artefacts, any status), verified public knowledge listings, and lessons the Hive learned automatically
+   * from public rooms and debates (hive_lessons, content may be shown: they come from public sources).
+   * Items are grouped by domain; links join lessons that share an agent. Every node carries real
+   * confirm/dispute counts and a rankScore (see modules/hive-learning/rank.ts). Artefact content is never
+   * returned here — titles only.
+   */
+  app.get('/hive', async (req) => {
+    const a = requirePerm(req, 'knowledge.read');
+    const d = db();
+    const domains = await d.select({ id: schema.capabilityDomains.id, slug: schema.capabilityDomains.slug, name: schema.capabilityDomains.name })
+      .from(schema.capabilityDomains);
+    const dom = new Map(domains.map((x) => [x.id, x]));
+    const lessons = await d.select({
+      id: schema.learningArtefacts.id, title: schema.learningArtefacts.title, status: schema.learningArtefacts.status,
+      learningType: schema.learningArtefacts.learningType, domainId: schema.learningArtefacts.domainId,
+      learnerAgentId: schema.learningArtefacts.learnerAgentId, trainerAgentId: schema.learningArtefacts.trainerAgentId,
+      sessionId: schema.learningArtefacts.sessionId, createdAt: schema.learningArtefacts.createdAt,
+    }).from(schema.learningArtefacts).where(eq(schema.learningArtefacts.orgId, a.orgId))
+      .orderBy(desc(schema.learningArtefacts.createdAt)).limit(300);
+    const listings = await d.select({
+      id: schema.knowledgeListings.id, title: schema.knowledgeListings.title, domainId: schema.knowledgeListings.domainId,
+      qualityScore: schema.knowledgeListings.qualityScore, orgId: schema.knowledgeListings.orgId, createdAt: schema.knowledgeListings.createdAt,
+    }).from(schema.knowledgeListings).where(and(
+      eq(schema.knowledgeListings.moderation, 'visible'), eq(schema.knowledgeListings.verificationStatus, 'verified'), eq(schema.knowledgeListings.status, 'active'),
+    )).orderBy(desc(schema.knowledgeListings.createdAt)).limit(200);
+    const hive = await d.select().from(schema.hiveLessons).where(eq(schema.hiveLessons.moderation, 'visible'))
+      .orderBy(desc(schema.hiveLessons.createdAt)).limit(300);
+    const agentIds = [...new Set([...lessons.flatMap((l) => [l.learnerAgentId, l.trainerAgentId]), ...hive.flatMap((h) => h.agentIds)].filter((x): x is string => !!x))];
+    const agents = agentIds.length ? await d.select({ id: schema.agents.id, name: schema.agents.name, orgId: schema.agents.orgId }).from(schema.agents).where(inArray(schema.agents.id, agentIds)) : [];
+    const agentName = new Map(agents.map((x) => [x.id, x.name]));
+    const agentOrg = new Map(agents.map((x) => [x.id, x.orgId]));
+    const [artefactCounts, listingCounts] = await Promise.all([
+      verdictCounts('artefact', lessons.filter((l) => l.status === 'approved' || l.status === 'applied').map((l) => l.id)),
+      verdictCounts('listing', listings.map((k) => k.id)),
+    ]);
+    const zero = { confirmCount: 0, disputeCount: 0 };
+    const counted = (c: { confirmCount: number; disputeCount: number }, createdAt: Date) => ({ ...c, rankScore: rankScore({ ...c, createdAt }) });
+
+    const nodes = [
+      ...lessons.map((l) => ({
+        id: l.id, kind: 'lesson' as const, title: l.title, status: l.status, learningType: l.learningType,
+        domain: l.domainId ? dom.get(l.domainId)?.slug ?? null : null,
+        agentId: l.trainerAgentId ?? l.learnerAgentId, learnerAgentId: l.learnerAgentId, trainerAgentId: l.trainerAgentId,
+        learner: agentName.get(l.learnerAgentId) ?? null, trainer: l.trainerAgentId ? agentName.get(l.trainerAgentId) ?? null : null,
+        sessionId: l.sessionId, createdAt: l.createdAt, mine: true,
+        ...counted(artefactCounts.get(l.id) ?? zero, l.createdAt),
+      })),
+      ...listings.map((k) => ({
+        id: k.id, kind: 'knowledge' as const, title: k.title, status: 'verified', learningType: null,
+        domain: k.domainId ? dom.get(k.domainId)?.slug ?? null : null,
+        agentId: null, learnerAgentId: null, trainerAgentId: null, learner: null, trainer: null,
+        sessionId: null, createdAt: k.createdAt, qualityScore: k.qualityScore, mine: k.orgId === a.orgId,
+        ...counted(listingCounts.get(k.id) ?? zero, k.createdAt),
+      })),
+      ...hive.map((h) => ({
+        id: h.id, kind: 'hive' as const, title: h.title, status: 'learned', learningType: null,
+        domain: h.domainId ? dom.get(h.domainId)?.slug ?? null : null,
+        agentId: h.agentIds[0] ?? null, learnerAgentId: null, trainerAgentId: null, learner: null, trainer: null,
+        sessionId: h.sourceType === 'session' ? h.sourceId : null, createdAt: h.createdAt,
+        content: h.content, sourceType: h.sourceType, sourceId: h.sourceId,
+        agentIds: h.agentIds, agentNames: h.agentIds.map((id) => agentName.get(id)).filter((x): x is string => !!x),
+        mine: h.agentIds.some((id) => agentOrg.get(id) === a.orgId),
+        ...counted({ confirmCount: h.confirmCount, disputeCount: h.disputeCount }, h.createdAt),
+      })),
+    ];
+    // links: lessons that share a trainer (taught by the same agent) or a learner (kept by the same agent);
+    // hive lessons link to each other and to our lessons through any agent they share
+    const links: { source: string; target: string; via: 'trainer' | 'learner' | 'agent' }[] = [];
+    const seen = new Set<string>();
+    const chain = (ids: string[], via: 'trainer' | 'learner' | 'agent') => {
+      for (let i = 1; i < ids.length && i < 12; i++) {
+        const k = [ids[i - 1], ids[i]].sort().join(':');
+        if (!seen.has(k)) { seen.add(k); links.push({ source: ids[i - 1]!, target: ids[i]!, via }); }
+      }
+    };
+    for (const via of ['trainer', 'learner'] as const) {
+      const by = new Map<string, string[]>();
+      for (const l of lessons) {
+        const key = via === 'trainer' ? l.trainerAgentId : l.learnerAgentId;
+        if (key) by.set(key, [...(by.get(key) ?? []), l.id]);
+      }
+      for (const ids of by.values()) chain(ids, via);
+    }
+    const byAgent = new Map<string, string[]>();
+    for (const h of hive) for (const ag of h.agentIds) byAgent.set(ag, [...(byAgent.get(ag) ?? []), h.id]);
+    for (const l of lessons) {
+      for (const ag of [l.trainerAgentId, l.learnerAgentId]) if (ag && byAgent.has(ag)) byAgent.set(ag, [...byAgent.get(ag)!, l.id]);
+    }
+    for (const ids of byAgent.values()) if (ids.length > 1) chain([...new Set(ids)], 'agent');
+    const usedDomains = [...new Set(nodes.map((n) => n.domain).filter(Boolean))] as string[];
+    return {
+      domains: usedDomains.map((slug) => ({ slug, name: domains.find((x) => x.slug === slug)?.name ?? slug })),
+      nodes, links,
+    };
   });
 
   /* ───── learning artefacts / memories / records ───── */

@@ -26,7 +26,7 @@ export default function DeveloperConsolePage() {
   const change = (t: Tab) => { setTab(t); history.replaceState(null, '', `#${t}`); };
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader eyebrow="Developer Console" title="Build on StringMind"
+      <PageHeader eyebrow="Developer Console" title="Build on Hive Mind"
         description="API keys, signed webhooks, request logs and usage for your organisation. Keys are shown once and stored only as hashes."
         actions={<>
           <Button variant="outline" icon={<BookOpen className="h-4 w-4" />} onClick={() => change('quickstart')}>Quickstart</Button>

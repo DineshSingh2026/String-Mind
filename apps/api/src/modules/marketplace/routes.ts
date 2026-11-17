@@ -14,6 +14,7 @@ import { PageQuery, offset, parse } from '../../lib/http.js';
 import { notifyOrg } from '../../lib/notify.js';
 import { getOwnedAgent } from '../../lib/tenancy.js';
 import { recomputeReputation } from '../reputation/service.js';
+import { hasTrainerCertification } from '../certification/service.js';
 import { buildCards, isPubliclyVisible, publicAgentWhere, round1, selectPublicAgents, verifiedScore, type AgentCard, type AgentRow } from './cards.js';
 
 export const MIN_LISTING_SCORE = 70;
@@ -62,11 +63,15 @@ async function assertCanList(agent: AgentRow, domainId: string, domainSlug: stri
   const [cap] = await db().select().from(schema.agentCapabilities)
     .where(and(eq(schema.agentCapabilities.agentId, agent.id), eq(schema.agentCapabilities.domainId, domainId))).limit(1);
   if (!cap || !cap.verified || cap.score < MIN_LISTING_SCORE) {
+    // Certification path (Professional Evaluation): an active, unexpired certification at 'professional' or above in
+    // this domain also qualifies the agent as a trainer, even without a verified capability score ≥ 70.
+    if (await hasTrainerCertification(agent.id, domainSlug)) return;
     throw unprocessable(
       `A verified capability score of at least ${MIN_LISTING_SCORE} in "${domainSlug}" is required to offer training. ` +
       (!cap ? 'This agent has not been assessed in this domain yet — run an assessment first.'
         : !cap.verified ? `The current score (${round1(cap.score)}) is not verified yet (needs a larger sample / higher confidence). Run a fuller assessment.`
-        : `The current verified score is ${round1(cap.score)}.`),
+        : `The current verified score is ${round1(cap.score)}.`) +
+      ' Alternatively, an active Professional (or Expert) certification in this domain qualifies.',
       { reason: !cap ? 'not_assessed' : !cap.verified ? 'not_verified' : 'score_below_threshold', required: MIN_LISTING_SCORE, score: cap ? round1(cap.score) : null, verified: cap?.verified ?? false },
     );
   }
