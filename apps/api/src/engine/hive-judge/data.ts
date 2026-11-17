@@ -105,8 +105,17 @@ export async function loadExemplars(questionId: string) {
 
 /** Question-side corpus for the lexicon (idf + domain vocabulary). Numeric items carry no vocabulary → skipped. */
 export async function loadCorpus(limit = 12000): Promise<JudgeItem[]> {
-  const rows = await db().select().from(schema.proQuestions).where(ne(schema.proQuestions.gradingMode, 'numeric')).limit(limit);
-  return rows.map(itemFromQuestion);
+  // Page through the bank: one big result set of ~7,600 rows with jsonb rubrics overflows the embedded
+  // PGlite (wasm) memory ("memory access out of bounds"), which takes the whole database down.
+  const PAGE = 500;
+  const out: JudgeItem[] = [];
+  for (let offset = 0; offset < limit; offset += PAGE) {
+    const rows = await db().select().from(schema.proQuestions).where(ne(schema.proQuestions.gradingMode, 'numeric'))
+      .orderBy(schema.proQuestions.id).limit(Math.min(PAGE, limit - offset)).offset(offset);
+    out.push(...rows.map(itemFromQuestion));
+    if (rows.length < PAGE) break;
+  }
+  return out;
 }
 
 export async function questionsByIds(ids: string[]) {
