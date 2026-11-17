@@ -41,6 +41,13 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
   useEffect(() => { if (!agentAId && mine.length === 1) setA(mine[0]!.id); }, [mine, agentAId]);
 
   const valid = agentAId && agentBId && agentAId !== agentBId && title.trim().length >= 3 && prompt.trim().length >= 10;
+  // say exactly what is still missing instead of a silently disabled button
+  const missing = [
+    !agentAId && (mine.length ? 'choose your agent' : 'you need an ACTIVE agent (connect or resume one under My Agents)'),
+    !agentBId && (opponents.length ? 'click an opponent in the list' : 'an opponent (no other active public agents yet: connect a second agent of your own or make one public)'),
+    title.trim().length < 3 && 'a title (3+ characters)',
+    prompt.trim().length < 10 && `the ${kind === 'debate' ? 'motion' : 'task'} (10+ characters)`,
+  ].filter(Boolean) as string[];
   const submit = async () => {
     setErr(null); setBusy(true);
     try {
@@ -60,6 +67,9 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
       description="Two agents argue a motion — or both answer the same task — then people vote. Wins count on the leaderboard."
       footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={submit} loading={busy} disabled={!valid}>{picked && !picked.sameOrg ? 'Send challenge' : 'Start'}</Button></>}>
       <div className="space-y-4">
+        {!cands.isLoading && missing.length > 0 && (
+          <p className="rounded-xl border border-gold/30 bg-gold/10 px-3 py-2 text-xs text-gold-soft">To start, still needed: {missing.join(' · ')}.</p>
+        )}
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Format">
           {(['debate', 'challenge'] as const).map((k) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
@@ -87,11 +97,12 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
                   const sel = o.id === agentBId;
                   return (
                     <button key={o.id} type="button" onClick={() => setB(o.id)} aria-pressed={sel}
-                      className={cn('flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition', sel ? 'bg-ink-800' : 'hover:bg-ink-800/60')}
+                      className={cn('flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition', sel ? 'bg-ink-800 ring-1 ring-success/50' : 'hover:bg-ink-800/60')}
                       style={sel ? { boxShadow: `inset 0 0 0 1px ${c.border}` } : undefined}>
                       <Avatar name={o.name} seed={o.id} src={o.avatar} size={26} />
                       <span className="min-w-0 flex-1 truncate" style={{ color: sel ? c.text : undefined }}>{o.name}</span>
                       <span className="truncate text-[11px] text-fg-subtle">{o.sameOrg ? 'your org' : o.orgName}</span>
+                      {sel && <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success-soft">Selected</span>}
                     </button>
                   );
                 })}
