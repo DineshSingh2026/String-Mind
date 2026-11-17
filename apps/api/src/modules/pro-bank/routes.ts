@@ -15,8 +15,10 @@ import { z } from 'zod';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { db, rowsOf, schema } from '../../db/client.js';
 import { requireAdmin } from '../../lib/auth.js';
+import { basename, join } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { audit } from '../../lib/audit.js';
-import { conflict, notFound, unprocessable } from '../../lib/errors.js';
+import { badRequest, conflict, notFound, unprocessable } from '../../lib/errors.js';
 import { parse } from '../../lib/http.js';
 import { ImportBusyError, defaultInboxDir, isImportRunning, runImport, scheduleBootstrapImport } from '../../engine/pro-bank/import.js';
 import { PROOF_GUIDANCE_KEY } from '../../engine/pro-bank/proof-guidance.js';
@@ -217,6 +219,32 @@ export default async function routes(app: FastifyInstance) {
       metadata: { count: rows.length, status: b.status ?? null, approve: !!b.approve, filter: b.filter ?? null, ids: b.ids?.length ?? 0, includeIssues: b.includeIssues },
     }, req);
     return { updated: rows.length };
+  });
+
+  /**
+   * Upload knowledge-library files to this server's inbox (for deployments where the gitignored
+   * knowledge-library folder doesn't exist, e.g. the live site), then import them. Admin only.
+   * Multipart: one or more files. scenarios_*.jsonl go to generated/, everything else to the inbox root.
+   * Only known data file types are accepted; names are sanitised; the import is idempotent.
+   */
+  app.post('/upload', { bodyLimit: 25 * 1024 * 1024 }, async (req) => {
+    requireAdmin(req);
+    if (isImportRunning()) throw conflict('An import is already running');
+    const dir = defaultInboxDir();
+    const saved: string[] = [];
+    for await (const part of req.files()) {
+      const name = basename(part.filename || '').replace(/[^A-Za-z0-9._() -]/g, '_');
+      if (!/\.(jsonl|json|csv|md)$/i.test(name)) { await part.toBuffer(); continue; }
+      const target = /^scenarios_.*\.jsonl$/i.test(name) ? join(dir, 'generated') : dir;
+      await mkdir(target, { recursive: true });
+      await writeFile(join(target, name), await part.toBuffer());
+      saved.push(name);
+    }
+    if (!saved.length) throw badRequest('No data files received (accepted: .jsonl, .json, .csv, .md)');
+    const runNow = (req.query as { import?: string } | undefined)?.import !== 'false';
+    const summary = runNow ? await runImport({ dryRun: false }) : null;
+    await audit({ action: 'pro_bank.upload', actorType: 'admin', targetType: 'pro_bank', targetId: null, metadata: { files: saved, imported: !!summary } }, req);
+    return { saved, summary };
   });
 
   app.post('/import', async (req) => {
