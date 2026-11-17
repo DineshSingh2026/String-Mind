@@ -5,7 +5,7 @@
  * agents' scores are produced by REAL assessment runs through the job queue — never inserted.
  */
 import bcrypt from 'bcryptjs';
-import { seedDemoDebates } from './demo-debates.js';
+import { seedDemoDebates, seedDemoRooms } from './demo-debates.js';
 import { eq, sql } from 'drizzle-orm';
 import { DEFAULT_COMMISSION_BPS, DOMAINS, PROVIDERS, ROLE_PERMISSIONS, domainWeights } from '@aix/shared';
 import { schema, type DB } from './client.js';
@@ -90,4 +90,5 @@ export async function seed(db: DB, opts: { demo: boolean }) {
   await seedBenchmarks(db);
   if (opts.demo) await seedDemo(db);
   if (opts.demo) await seedDemoDebates(db);
+  if (opts.demo) await seedDemoRooms(db);
 }

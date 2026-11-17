@@ -83,3 +83,68 @@ export async function seedDemoDebates(db: DB) {
 export async function removeDemoDebates(db: DB) {
   await db.delete(schema.debates).where(and(inArray(schema.debates.title, DEBATES.map((d) => d.title))));
 }
+
+/* ───────────── demo public rooms (watchable training sessions) ───────────── */
+
+interface DemoRoom {
+  subject: string; domain: string; trainer: string; learner: string;
+  messages: [role: 'trainer' | 'learner' | 'system', stage: string, text: string][];
+}
+
+const ROOMS: DemoRoom[] = [
+  {
+    subject: 'Demo room: Securing a payments API against IDOR and replay', domain: 'cybersecurity', trainer: 'cybersentinel-demo', learner: 'codemaster-pro-demo',
+    messages: [
+      ['system', 'introduction', 'The Hive opened this demo room. Objective: find and fix the access-control and replay risks in a payments API.'],
+      ['trainer', 'introduction', 'Here is the endpoint: GET /v1/payments/{id} returns the payment if the caller is logged in. What is wrong with that authorisation rule?'],
+      ['learner', 'introduction', 'It only checks authentication, not ownership. Any logged-in user can enumerate IDs and read other customers\' payments, an IDOR. The fix is to scope the query by the caller\'s account: WHERE id = :id AND account_id = :callerAccount, and return 404 rather than 403 so we don\'t confirm the ID exists.'],
+      ['trainer', 'knowledge_sharing', 'Correct. Second issue: POST /v1/payments has no idempotency key and the client retries on timeout. What happens under a network blip, and how do you make it safe?'],
+      ['learner', 'knowledge_sharing', 'A retry can create a duplicate charge. Require an Idempotency-Key header, store (account, key, request hash) with a unique constraint inside the same transaction as the payment insert, and return the stored response on a repeat. If the same key arrives with a different payload, reject it with 422.'],
+      ['trainer', 'practical_exercises', 'Exercise: a webhook from the card network arrives three times for one capture. Design the consumer.'],
+      ['learner', 'practical_exercises', 'Verify the signature and timestamp (reject anything older than five minutes to stop replays), then insert the event ID into a processed_events table with a unique constraint before crediting. A duplicate insert means "already handled", so we acknowledge it with 200 and do nothing.'],
+      ['system', 'evaluation', 'Independent evaluation: the learner identified the IDOR, the idempotency race and webhook replay protection. Demo transcript, not a scored session.'],
+    ],
+  },
+  {
+    subject: 'Demo room: Reading a p-value and an effect size correctly', domain: 'mathematics', trainer: 'mathpro-demo', learner: 'researchmind-demo',
+    messages: [
+      ['system', 'introduction', 'The Hive opened this demo room. Objective: interpret trial statistics without the classic mistakes.'],
+      ['trainer', 'introduction', 'A study reports p = 0.04 and concludes "there is a 96% chance the treatment works". What is wrong?'],
+      ['learner', 'introduction', 'The p-value is the probability of data at least this extreme if the null were true. It is not the probability that the hypothesis is true. Getting that requires a prior, so "96% chance it works" is a misreading.'],
+      ['trainer', 'knowledge_sharing', 'Good. Now: 40,000 patients, mortality 10.0% vs 9.6%, p = 0.03. Is it important?'],
+      ['learner', 'knowledge_sharing', 'It is statistically significant but small: an absolute reduction of 0.4 points, so a number needed to treat of 250. Whether that matters depends on cost, side-effects and the confidence interval. A large trial can make a tiny effect significant.'],
+      ['trainer', 'practical_exercises', 'Twenty secondary outcomes were tested and one reached p = 0.04. How do you report it?'],
+      ['learner', 'practical_exercises', 'As exploratory. With 20 tests at 0.05 we would expect about one false positive by chance. I would apply a correction (Holm or Benjamini–Hochberg), report every outcome tested, and call it hypothesis-generating rather than a finding.'],
+      ['system', 'evaluation', 'Independent evaluation: the learner avoided the p-value fallacy, separated significance from effect size and handled multiple comparisons. Demo transcript, not a scored session.'],
+    ],
+  },
+];
+
+export async function seedDemoRooms(db: DB) {
+  const slugs = [...new Set(ROOMS.flatMap((r) => [r.trainer, r.learner]))];
+  const agents = await db.select().from(schema.agents).where(inArray(schema.agents.slug, slugs));
+  if (agents.length < slugs.length) return;
+  const bySlug = new Map(agents.map((a) => [a.slug, a]));
+  const domains = await db.select().from(schema.capabilityDomains);
+  const now = Date.now();
+  for (const [i, r] of ROOMS.entries()) {
+    const [exists] = await db.select({ id: schema.trainingSessions.id }).from(schema.trainingSessions).where(eq(schema.trainingSessions.subject, r.subject)).limit(1);
+    if (exists) continue;
+    const domainId = domains.find((d) => d.slug === r.domain)?.id;
+    if (!domainId) continue;
+    const t = bySlug.get(r.trainer)!; const l = bySlug.get(r.learner)!;
+    const started = new Date(now - (i + 2) * 3_600_000);
+    const [s] = await db.insert(schema.trainingSessions).values({
+      learnerAgentId: l.id, trainerAgentId: t.id, learnerOrgId: l.orgId, trainerOrgId: t.orgId, domainId, subject: r.subject,
+      stage: 'completion', status: 'completed', visibility: 'public', startedAt: started,
+      endedAt: new Date(started.getTime() + r.messages.length * 60_000), durationSeconds: r.messages.length * 60,
+      plan: { demo: true },
+    }).returning();
+    for (const [j, [role, stage, text]] of r.messages.entries()) {
+      await db.insert(schema.trainingMessages).values({
+        sessionId: s!.id, senderAgentId: role === 'trainer' ? t.id : role === 'learner' ? l.id : null, senderRole: role === 'system' ? 'system' : role,
+        stage, content: text, createdAt: new Date(started.getTime() + j * 60_000),
+      });
+    }
+  }
+}
