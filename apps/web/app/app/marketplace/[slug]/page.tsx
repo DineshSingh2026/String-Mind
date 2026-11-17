@@ -18,7 +18,10 @@ import { IdleToken } from '@/components/brand/IdleToken';
 
 /* Assumed profile shape: MarketAgent + optional extras from GET /marketplace/agents/:slug. */
 interface Profile extends MarketAgent {
-  claimedDomains?: ClaimedDomain[]; tools?: string[]; availability?: string | null; createdAt?: string;
+  claimedDomains?: ClaimedDomain[];
+  tools?: (string | { name?: string; description?: string })[];
+  availability?: string | { status?: string; health?: string; acceptsTraining?: boolean; acceptsLearning?: boolean; lastHealthCheckAt?: string | null } | null;
+  createdAt?: string;
   reputation?: { score?: number | null; level?: string | null; components?: Record<string, number | null> } | null;
   scorecard?: { overallScore?: number | null; domains?: { slug: string; name?: string; score: number | null; verified?: boolean; sampleSize?: number }[]; claimedOnly?: string[] } | null;
   reviews?: Review[];
@@ -131,8 +134,8 @@ function AgentProfile() {
           <Section title="Details">
             <dl className="space-y-3 text-sm">
               {!!p.languages?.length && <div><dt className="mb-1 flex items-center gap-1.5 text-xs text-fg-muted"><Globe2 className="h-3.5 w-3.5" aria-hidden />Languages</dt><dd className="flex flex-wrap gap-1">{p.languages.map((l) => <Badge key={l}>{l}</Badge>)}</dd></div>}
-              {!!p.tools?.length && <div><dt className="mb-1 flex items-center gap-1.5 text-xs text-fg-muted"><Wrench className="h-3.5 w-3.5" aria-hidden />Tools</dt><dd className="flex flex-wrap gap-1">{p.tools.map((l) => <Badge key={l}>{l}</Badge>)}</dd></div>}
-              {p.availability && <div><dt className="mb-1 flex items-center gap-1.5 text-xs text-fg-muted"><Clock className="h-3.5 w-3.5" aria-hidden />Availability</dt><dd>{p.availability}</dd></div>}
+              {!!p.tools?.length && <div><dt className="mb-1 flex items-center gap-1.5 text-xs text-fg-muted"><Wrench className="h-3.5 w-3.5" aria-hidden />Tools</dt><dd className="flex flex-wrap gap-1">{p.tools.map((t, i) => { const n = typeof t === 'string' ? t : t?.name ?? 'Tool'; return <Badge key={`${n}-${i}`}>{n}</Badge>; })}</dd></div>}
+              {p.availability && <div><dt className="mb-1 flex items-center gap-1.5 text-xs text-fg-muted"><Clock className="h-3.5 w-3.5" aria-hidden />Availability</dt><dd>{availabilityText(p.availability)}</dd></div>}
             </dl>
             <Button className="mt-4" size="sm" variant="ghost" onClick={() => setReportOpen(true)} icon={<Flag className="h-3.5 w-3.5" />}>Report this agent</Button>
           </Section>
@@ -266,4 +269,12 @@ function ReportModal({ open, onClose, targetId }: { open: boolean; onClose: () =
       </div>
     </Modal>
   );
+}
+
+/** Availability arrives as an object from the API ({status, health, acceptsTraining, …}); older shapes may be a string. */
+function availabilityText(a: NonNullable<Profile['availability']>): string {
+  if (typeof a === 'string') return a;
+  const cap = (s?: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : null);
+  return [cap(a.status), cap(a.health), a.acceptsTraining ? 'Accepting training' : a.acceptsTraining === false ? 'Not accepting training' : null]
+    .filter(Boolean).join(' · ') || '—';
 }
