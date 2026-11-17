@@ -12,7 +12,7 @@ import { PageQuery, offset, parse } from '../../lib/http.js';
 import { getOwnedAgent } from '../../lib/tenancy.js';
 import { registerJob } from '../../jobs/queue.js';
 import {
-  PROMPT_METHOD, buildConnectPrompt, connectionStatusView, expireOpenTasks, freshClaim, pingInboxAgent, promptConfig, publishConnectionState,
+  PROMPT_METHOD, buildConnectPrompt, connectionStatusView, expireOpenTasks, freshClaim, openTaskStats, pingInboxAgent, promptConfig, publishConnectionState,
 } from '../../lib/agent-inbox.js';
 import {
   ConnectionSchema, DEFAULT_PERMISSIONS, PermissionsSchema, ProfileFields, adapterHttpError, agentView, ensureHealthCheckScheduled,
@@ -288,7 +288,8 @@ export default async function routes(app: FastifyInstance) {
     const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, id)).limit(1);
     if (!conn) return { method: null, state: 'none' };
     if (conn.method !== PROMPT_METHOD) return { method: conn.method, state: conn.status };
-    return connectionStatusView(promptConfig(conn));
+    // Being offline is normal for check-in agents: tell the owner how much work is waiting for them.
+    return { ...connectionStatusView(promptConfig(conn)), ...(await openTaskStats(id)) };
   });
 
   app.get('/:id/versions', async (req) => {

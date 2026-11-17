@@ -46,6 +46,38 @@ export async function getRuntime(agentId: string): Promise<AgentRuntime> {
   return createRuntime(await getConnectionInfo(agentId));
 }
 
+type AgentRow = typeof schema.agents.$inferSelect;
+
+/**
+ * The system prompt an agent receives for a call: its instructions, role, the request's own system text and the
+ * retrieved knowledge context. Shared by invokeAgent and async (inbox) assessments so both see identical prompts.
+ */
+export async function buildInvocationSystem(
+  agent: Pick<AgentRow, 'id' | 'instructions' | 'role'>, req: Pick<InvokeRequest, 'messages' | 'system'>,
+  opts: { withContext?: boolean; contextQuery?: string; sessionId?: string } = {},
+): Promise<{ system: string; context: AgentContext | null }> {
+  let context: AgentContext | null = null;
+  if (opts.withContext !== false) {
+    const query = opts.contextQuery ?? lastUserMessage(req as InvokeRequest);
+    if (query.trim()) {
+      try {
+        context = await buildAgentContext(agent.id, query, { sessionId: opts.sessionId });
+      } catch (err) {
+        // Context retrieval is an enhancement: degrade to no context rather than failing the call.
+        console.error(`[adapters] context build failed for agent ${agent.id}: ${err instanceof Error ? err.message : String(err)}`);
+        context = null;
+      }
+    }
+  }
+  const system = [
+    agent.instructions?.trim(),
+    agent.role?.trim() ? `Your role: ${agent.role.trim()}` : '',
+    req.system?.trim(),
+    context?.text ?? '',
+  ].filter(Boolean).join('\n\n');
+  return { system, context };
+}
+
 export async function invokeAgent(
   agentId: string, req: InvokeRequest, opts: { withContext?: boolean; contextQuery?: string; sessionId?: string } = {},
 ): Promise<InvokeResult & { context: AgentContext | null }> {
@@ -63,26 +95,7 @@ export async function invokeAgent(
     throw new AdapterError(`Daily call limit reached for this agent (${agent.usageLimits.maxCallsPerDay}/day). Raise it in the agent's limits settings.`, 'rate_limit');
   }
 
-  let context: AgentContext | null = null;
-  if (opts.withContext !== false) {
-    const query = opts.contextQuery ?? lastUserMessage(req);
-    if (query.trim()) {
-      try {
-        context = await buildAgentContext(agentId, query, { sessionId: opts.sessionId });
-      } catch (err) {
-        // Context retrieval is an enhancement: degrade to no context rather than failing the call.
-        console.error(`[adapters] context build failed for agent ${agentId}: ${err instanceof Error ? err.message : String(err)}`);
-        context = null;
-      }
-    }
-  }
-
-  const system = [
-    agent.instructions?.trim(),
-    agent.role?.trim() ? `Your role: ${agent.role.trim()}` : '',
-    req.system?.trim(),
-    context?.text ?? '',
-  ].filter(Boolean).join('\n\n');
+  const { system, context } = await buildInvocationSystem(agent, req, opts);
 
   // Inbox (connect-via-prompt) agents answer asynchronously by polling: they get the inbox timeout, not the HTTP one.
   const timeoutMs = runtime.adapter === 'inbox' ? inboxTimeoutMs() : (req.timeoutMs ?? DEFAULT_TIMEOUT_MS);

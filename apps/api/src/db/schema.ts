@@ -228,6 +228,8 @@ export const agentTasks = pgTable('agent_tasks', {
   deliveredAt: timestamp('delivered_at', { withTimezone: true }),
   answeredAt: timestamp('answered_at', { withTimezone: true }),
   deadline: timestamp('deadline', { withTimezone: true }).notNull(),
+  /** Links async work to its owner, e.g. { assessmentId, questionId, attempt, domainId } for async assessments. */
+  meta: jsonb('meta').$type<Record<string, unknown> | null>(),
 }, (t) => [index('agent_tasks_agent_status_idx').on(t.agentId, t.status, t.createdAt)]);
 
 /* ───────────────────────────── Capability & benchmarks ───────────────────────────── */
@@ -355,7 +357,8 @@ export const agentCapabilities = pgTable('agent_capabilities', {
   score: real('score').notNull(),
   accuracy: real('accuracy').notNull(),
   hallucinationRate: real('hallucination_rate').notNull().default(0),
-  consistency: real('consistency').notNull().default(0),
+  /** null when not measured (Quick assessments ask each question once) */
+  consistency: real('consistency'),
   confidence: real('confidence').notNull(),
   sampleSize: integer('sample_size').notNull(),
   dimensionScores: jsonb('dimension_scores').$type<Record<string, number>>().notNull().default({}),

@@ -11,6 +11,8 @@ import { BackLink, ListSkeleton, Section, StatusPill, VerifiedBadge, domainName,
 import { confPct } from '@/components/app/ScorecardView';
 import { listOf, type Assessment, type Paged } from '@/components/app/types';
 import { PulseDot, StaggerLi, StaggerList, motion } from '@/components/app/motion';
+import { CheckInHint } from '@/components/app/PromptConnect';
+import { api, errorMessage } from '@/lib/api';
 
 interface Result { id: string; domainSlug?: string; domain?: string; questionId?: string; prompt: string; response: string | null; correct: boolean | null; score: number | null; failureCategory?: string | null; evaluator?: string | null; kind?: string; repeat?: number; needsHumanReview?: boolean }
 
@@ -33,6 +35,13 @@ export default function AssessmentDetailPage() {
   const progress = rawP == null ? null : rawP <= 1 ? rawP * 100 : rawP;
   const tests = live?.testsCompleted ?? a.testsCompleted ?? null;
   const domains = a.domains ?? [];
+  const waiting = running && a.summary?.mode === 'async' && (progress ?? 0) < 100;
+  const agentName = a.agent?.name ?? 'your agent';
+  const cancel = async () => {
+    if (!window.confirm('Cancel this assessment? Unanswered tasks are withdrawn from your agent.')) return;
+    try { await api.post(`/assessments/${id}/cancel`, {}); } catch (e) { window.alert(errorMessage(e)); }
+    void mutate();
+  };
 
   return (
     <div className="space-y-6">
@@ -53,15 +62,23 @@ export default function AssessmentDetailPage() {
             </span>
           )}
         </div>
+        {waiting && (
+          <div className="mt-5 rounded-xl border border-gold/30 bg-gold/5 p-4" aria-live="polite">
+            <p className="text-sm font-semibold text-fg">Waiting for {agentName} — {fmtNumber(tests ?? 0)} of {fmtNumber(a.testsTotal ?? 0)} answered.</p>
+            <p className="mt-1 text-sm text-fg-muted">Tasks wait until {a.summary?.deadline ? fmtDateTime(a.summary.deadline) : '24 hours after the start'}. The score appears as soon as every question is answered.</p>
+            <CheckInHint className="mt-3" />
+            <div className="mt-3"><Button size="sm" variant="ghost" onClick={cancel}>Cancel assessment</Button></div>
+          </div>
+        )}
         {running && (
           <div className="mt-5">
-            <div className="mb-1.5 flex justify-between text-xs text-fg-muted"><span className="flex items-center gap-2"><PulseDot tone={a.status === 'queued' ? 'warning' : 'electric'} />{a.status === 'queued' ? 'Queued — waiting for a worker' : 'Running benchmark questions…'}</span><span className="tabular-nums">{progress == null ? '' : `${Math.round(progress)}%`}{tests != null ? ` · ${fmtNumber(tests)}${a.testsTotal ? ` / ${fmtNumber(a.testsTotal)}` : ''} tests` : ''}</span></div>
+            <div className="mb-1.5 flex justify-between text-xs text-fg-muted"><span className="flex items-center gap-2"><PulseDot tone={a.status === 'queued' ? 'warning' : 'electric'} />{a.status === 'queued' ? 'Queued — waiting for a worker' : waiting ? 'Waiting for your agent to check in…' : 'Running benchmark questions…'}</span><span className="tabular-nums">{progress == null ? '' : `${Math.round(progress)}%`}{tests != null ? ` · ${fmtNumber(tests)}${a.testsTotal ? ` / ${fmtNumber(a.testsTotal)}` : ''} tests` : ''}</span></div>
             <div className="ax-shimmer relative h-2.5 overflow-hidden rounded-full bg-ink-800" role="progressbar" aria-label="Assessment progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress ?? 0)}>
               <motion.div className="h-full rounded-full bg-ai-sheen shadow-[0_0_14px_rgb(var(--electric)/0.7)]" initial={{ width: 0 }} animate={{ width: `${Math.max(2, progress ?? 0)}%` }} transition={{ type: 'spring', stiffness: 60, damping: 18 }} />
             </div>
           </div>
         )}
-        {a.status === 'failed' && <div className="mt-4"><Alert tone="danger" title="Assessment failed">{a.error ?? 'The assessment could not complete. Check the agent connection and try again.'}</Alert></div>}
+        {a.status === 'failed' && <div className="mt-4"><Alert tone="danger" title="Assessment failed"><span className="whitespace-pre-wrap break-words">{a.error ?? 'The assessment could not complete. Check the agent connection and try again.'}</span></Alert></div>}
         {a.status === 'completed' && <div className="mt-4"><Button size="sm" variant="outline" href={`/app/agents/${a.agentId}`}>View full scorecard</Button></div>}
       </section>
 
@@ -97,7 +114,7 @@ export default function AssessmentDetailPage() {
         <ul className="space-y-2 text-sm text-fg-muted">
           <li className="flex gap-2"><Info className="mt-0.5 h-4 w-4 shrink-0 text-electric" aria-hidden />A domain is <b className="text-fg">verified</b> only with ≥{QUALITY.MIN_SAMPLE_FOR_VERIFIED} graded responses and ≥{QUALITY.MIN_CONFIDENCE_FOR_VERIFIED * 100}% statistical confidence.</li>
           <li className="flex gap-2"><Info className="mt-0.5 h-4 w-4 shrink-0 text-electric" aria-hidden />“Meets {QUALITY.ACCURACY_TARGET}% target” is only claimed with ≥{QUALITY.MIN_SAMPLE_FOR_TARGET_CLAIM} samples; otherwise it is left blank.</li>
-          <li className="flex gap-2"><Info className="mt-0.5 h-4 w-4 shrink-0 text-electric" aria-hidden />Ground-truth answers are hidden to keep benchmarks independent. Repeats measure consistency.</li>
+          <li className="flex gap-2"><Info className="mt-0.5 h-4 w-4 shrink-0 text-electric" aria-hidden />Ground-truth answers are hidden to keep benchmarks independent. Repeats measure consistency — a Quick run (1×) does not measure it, so it neither helps nor hurts the score.</li>
         </ul>
       </Section>
     </div>

@@ -27,6 +27,28 @@ export interface ConnectionStatus {
   claimExpiresAt?: string | null; claimedAt?: string | null; firstSeenAt?: string | null; lastSeenAt?: string | null; verifiedAt?: string | null;
   agentReported?: { name?: string | null; model?: string | null; framework?: string | null } | null;
   steps?: { key: StepKey | string; label?: string; done: boolean; at?: string | null }[];
+  /** open tasks waiting for the agent (check-in agents may be offline — that's normal) */
+  pendingTasks?: number; oldestPendingAt?: string | null;
+}
+
+/** The one sentence an owner gives a check-in (chat) agent to make it answer its queued tasks. */
+export const CHECK_IN_SENTENCE = 'Check StringMind for tasks and answer them all.';
+
+/** "Your agent doesn't need to stay online" explainer with a copy button for the check-in sentence. */
+export function CheckInHint({ pendingTasks, className }: { pendingTasks?: number; className?: string }) {
+  const { copied, copy } = useCopy();
+  return (
+    <div className={cn('rounded-xl border border-line bg-ink-950/30 p-3 text-sm text-fg-muted', className)}>
+      <p>Your agent doesn’t need to stay online. Queued tasks wait up to 24 hours — just tell your agent:</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <strong className="break-words text-fg">“{CHECK_IN_SENTENCE}”</strong>
+        <Button size="sm" variant="outline" onClick={() => void copy('checkin', CHECK_IN_SENTENCE, 'Copied — paste it to your agent')}
+          icon={copied === 'checkin' ? <ClipboardCheck className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}>{copied === 'checkin' ? 'Copied!' : 'Copy'}</Button>
+      </div>
+      {!!pendingTasks && pendingTasks > 0 && <p className="mt-2 text-xs font-medium text-gold-soft">Pending tasks: {pendingTasks}</p>}
+      <p className="mt-2 text-xs text-fg-subtle">Always-on agents (or the bridge script from the instructions) answer tasks automatically.</p>
+    </div>
+  );
 }
 
 export const PROMPT_PROVIDER = 'prompt-connect';
@@ -122,7 +144,7 @@ export function ConnectionStatePill({ state, size = 'md' }: { state: ConnectionS
     case 'claimed': case 'verifying':
       return <span className={cn(base, 'border-electric/40 bg-electric/10 text-electric-soft')}><span className="ax-pulse ax-pulse--electric" aria-hidden />Connecting…</span>;
     case 'offline':
-      return <span className={cn(base, 'border-warning/40 bg-warning/10 text-warning')}><WifiOff className="h-3.5 w-3.5" aria-hidden />Offline</span>;
+      return <span className={cn(base, 'border-line bg-ink-800/60 text-fg-muted')}><WifiOff className="h-3.5 w-3.5" aria-hidden />{size === 'sm' ? 'Offline' : 'Offline · tasks will wait'}</span>;
     case 'expired':
       return <span className={cn(base, 'border-danger/40 bg-danger/10 text-danger-soft')}><AlertTriangle className="h-3.5 w-3.5" aria-hidden />Code expired</span>;
     case 'awaiting_claim':
@@ -324,6 +346,7 @@ export function PromptConnectPanel({ agent, initial, actions }: { agent: Pick<Ag
           <p className="flex items-center gap-2 text-base font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-success text-ink-950"><Check className="h-4 w-4" aria-hidden /></span>{agent.name} is connected</p>
           <p className="mt-1 text-sm text-fg-muted">Your agent answered its verification task. Next, measure what it can do with an independent capability assessment.</p>
           <div className="mt-3"><Reported r={status?.agentReported} /></div>
+          <CheckInHint pendingTasks={status?.pendingTasks} className="mt-3" />
           {actions && <div className="mt-4 flex flex-wrap gap-2">{actions(state)}</div>}
         </motion.div>
       ) : (
@@ -346,6 +369,7 @@ export function PromptConnectPanel({ agent, initial, actions }: { agent: Pick<Ag
         {state !== 'connected' && <div className="mt-3"><Reported r={status?.agentReported} /></div>}
       </div>
 
+      {state === 'offline' && <CheckInHint pendingTasks={status?.pendingTasks} />}
       {state === 'offline' && actions && <div className="flex flex-wrap gap-2">{actions(state)}</div>}
 
       <details className="group rounded-xl border border-line bg-ink-900/40">
@@ -456,7 +480,7 @@ export function PromptConnectionCard({ agent, canManage }: { agent: Pick<Agent, 
           {unclaimedKnown && info && (
             <p className="mt-3 text-xs text-fg-muted">Current claim code <span className="ml-1 font-mono text-sm font-semibold tracking-wider text-gold-soft">{info.claimCode}</span></p>
           )}
-          {state === 'offline' && <p className="mt-3 text-xs text-warning">Your agent stopped checking in. Restart it (or its bridge script) — it picks up where it left off.</p>}
+          {(state === 'connected' || state === 'offline') && <CheckInHint pendingTasks={status?.pendingTasks} className="mt-3" />}
         </>
       )}
       {canManage && (

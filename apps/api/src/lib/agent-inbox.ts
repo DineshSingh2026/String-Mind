@@ -200,18 +200,46 @@ export async function expireOpenTasks(agentId: string) {
   for (const r of rows) inboxEvents.emit(`task:${r.id}`);
 }
 
-/** A task delivered but not answered within this window is offered again (the agent may have crashed mid-task). */
+/**
+ * A task delivered but not answered within this window is offered again (the agent may have crashed mid-task).
+ * Short-lived tasks (live calls, ≤30 min deadline) are re-offered after 60 s; long-lived check-in tasks (async
+ * assessments, fetched in batches by chat assistants) after 10 min.
+ */
 const REDELIVER_AFTER_MS = 60_000;
+const REDELIVER_LONG_AFTER_MS = 10 * 60_000;
+const LONG_TASK_MS = 30 * 60_000;
+
+/** SQL: the task can be (re)delivered now. */
+function deliverable(nowMs: number) {
+  const shortBefore = new Date(nowMs - REDELIVER_AFTER_MS).toISOString();
+  const longBefore = new Date(nowMs - REDELIVER_LONG_AFTER_MS).toISOString();
+  const t = schema.agentTasks;
+  return sql`(${t.status} = 'pending' OR (${t.status} = 'delivered' AND ${t.deliveredAt} < CASE WHEN ${t.deadline} - ${t.createdAt} > ${`${LONG_TASK_MS / 1000} seconds`}::interval THEN ${longBefore}::timestamptz ELSE ${shortBefore}::timestamptz END))`;
+}
+
+/** Atomically take up to `limit` deliverable tasks (oldest first) and mark them delivered — batch check-in API. */
+export async function takeTasks(agentId: string, limit: number): Promise<Task[]> {
+  const now = new Date();
+  const t = schema.agentTasks;
+  const cands = await db().select({ id: t.id, status: t.status, deliveredAt: t.deliveredAt }).from(t).where(and(
+    eq(t.agentId, agentId), sql`${t.deadline} > ${now.toISOString()}::timestamptz`, deliverable(now.getTime()),
+  )).orderBy(t.createdAt).limit(limit);
+  if (!cands.length) return [];
+  // Re-check deliverability in the UPDATE so a concurrent taker can't receive the same task.
+  const taken = await db().update(t).set({ status: 'delivered', deliveredAt: now })
+    .where(and(inArray(t.id, cands.map((c) => c.id)), sql`${t.deadline} > ${now.toISOString()}::timestamptz`, deliverable(now.getTime())))
+    .returning();
+  return taken.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
 
 /** Atomically take the oldest deliverable task for an agent (marks it delivered). */
 export async function takeNextTask(agentId: string): Promise<Task | null> {
   for (let i = 0; i < 5; i++) {
     const now = new Date();
-    const redeliverBefore = new Date(now.getTime() - REDELIVER_AFTER_MS).toISOString();
     const [cand] = await db().select().from(schema.agentTasks).where(and(
       eq(schema.agentTasks.agentId, agentId),
       sql`${schema.agentTasks.deadline} > ${now.toISOString()}::timestamptz`,
-      sql`(${schema.agentTasks.status} = 'pending' OR (${schema.agentTasks.status} = 'delivered' AND ${schema.agentTasks.deliveredAt} < ${redeliverBefore}::timestamptz))`,
+      deliverable(now.getTime()),
     )).orderBy(schema.agentTasks.createdAt).limit(1);
     if (!cand) return null;
     const [taken] = await db().update(schema.agentTasks).set({ status: 'delivered', deliveredAt: now })
@@ -271,6 +299,15 @@ export async function countPendingTasks(agentId: string): Promise<number> {
   return Number(r?.n ?? 0);
 }
 
+/** Open (pending or delivered-but-unanswered) tasks still before their deadline: count + oldest creation time. */
+export async function openTaskStats(agentId: string): Promise<{ pendingTasks: number; oldestPendingAt: string | null }> {
+  const [r] = await db().select({ n: sql<number>`count(*)::int`, oldest: sql<string | null>`min(${schema.agentTasks.createdAt})` }).from(schema.agentTasks).where(and(
+    eq(schema.agentTasks.agentId, agentId), inArray(schema.agentTasks.status, ['pending', 'delivered']),
+    sql`${schema.agentTasks.deadline} > ${new Date().toISOString()}::timestamptz`,
+  ));
+  return { pendingTasks: Number(r?.n ?? 0), oldestPendingAt: r?.oldest ? new Date(r.oldest).toISOString() : null };
+}
+
 /** Owner-triggered ping ("Test connection") for an inbox agent. */
 export async function pingInboxAgent(agentId: string, orgId: string, timeoutMs = 30_000): Promise<{ ok: boolean; latencyMs: number; error?: string; sample?: string }> {
   const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, agentId)).limit(1);
@@ -299,4 +336,26 @@ function humanUtc(iso: string): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+}
+
+/** Shown whenever a prompt-connected agent isn't answering tasks — tells the owner exactly how to fix it. */
+export const KEEP_RUNNING_HELP =
+  'Live sessions (training, playground, Test connection) need the agent to be running and polling ' +
+  'GET /agent-api/tasks/next right now. A chat assistant (ChatGPT, Grok, Claude chat…) only runs while you talk to it — ' +
+  'start a conversation and tell it to keep checking StringMind, or run the bridge script from /connect.md (Node or Python) on your machine. ' +
+  'Assessments do not need this: their tasks wait up to 24 hours.';
+
+/**
+ * null when the agent can take tasks right now (not prompt-connected, or prompt-connected and checking in);
+ * otherwise a human-readable reason including when it was last seen.
+ */
+export async function promptAgentOfflineReason(agentId: string, now = Date.now()): Promise<string | null> {
+  const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, agentId)).limit(1);
+  if (!conn || conn.method !== PROMPT_METHOD) return null;
+  const cfg = promptConfig(conn);
+  if (isOnline(cfg, now)) return null;
+  if (!cfg.verifiedAt) return 'This agent has not finished connecting yet. Paste the connect prompt into your agent and wait for "Connected" before running an assessment.';
+  const ago = cfg.lastSeenAt ? Math.round((now - Date.parse(cfg.lastSeenAt)) / 1000) : null;
+  const seen = ago == null ? 'never' : ago < 120 ? `${ago}s ago` : ago < 7200 ? `${Math.round(ago / 60)} min ago` : `${Math.round(ago / 3600)} h ago`;
+  return `Your agent is offline (last checked in ${seen}). ${KEEP_RUNNING_HELP}`;
 }

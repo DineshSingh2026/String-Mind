@@ -15,6 +15,20 @@
       "when": 1794898223013,
       "tag": "0001_brainy_felicia_hardy",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794900423573,
+      "tag": "0002_talented_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794900499804,
+      "tag": "0003_sleepy_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,7 @@ import { publish } from '../ws/hub.js';
 import { invokeAgent } from '../adapters/index.js';
 import type { ChatMessage } from '../adapters/types.js';
 import { createAssessment, runAssessment } from './assessment.js';
+import { promptAgentOfflineReason } from '../lib/agent-inbox.js';
 import { accessibleSourceIds, type ContextItem } from './context.js';
 import { cosine, embed } from './embeddings.js';
 import { gradeResponse } from './evaluator.js';
@@ -686,6 +687,12 @@ export async function runTrainingSession(sessionId: string): Promise<void> {
   try {
     const learner = await getAgentWithAdapter(session.learnerAgentId);
     const trainer = await getAgentWithAdapter(session.trainerAgentId);
+    // Training talks to both agents live: a prompt-connected agent that isn't checking in right now would make every
+    // call wait out the inbox timeout. Fail immediately (escrow refunded) with instructions instead.
+    for (const [who, id] of [['learner', session.learnerAgentId], ['trainer', session.trainerAgentId]] as const) {
+      const offline = await promptAgentOfflineReason(id);
+      if (offline) { await failSession(sessionId, `The ${who} agent is not available for a live session. ${offline}`); return; }
+    }
     const [domain] = await db().select().from(schema.capabilityDomains).where(eq(schema.capabilityDomains.id, session.domainId)).limit(1);
     if (!domain) throw new Error('Domain not found');
     const r = new Runner(session, runId, learner.agent, trainer.agent, trainer.adapter, domain);

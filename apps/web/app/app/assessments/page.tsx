@@ -91,10 +91,18 @@ function AssessmentList({ agentId, setAgentId, agents, canRun, onNew }: { agentI
 
 function NewAssessmentModal({ open, onClose, agents, agentsLoading, defaultAgent, onCreated }: { open: boolean; onClose: () => void; agents: Agent[]; agentsLoading: boolean; defaultAgent: string; onCreated: (id: string) => void }) {
   const [agentId, setAgentId] = useState(defaultAgent);
-  const [domains, setDomains] = useState<string[]>(DOMAINS.map((d) => d.slug));
-  const [repeats, setRepeats] = useState(2);
+  const [domains, setDomains] = useState<string[]>(['general']);
+  const [repeats, setRepeats] = useState(1);
   const { busy, run } = useAction();
   useEffect(() => { if (open && !agentId && agents[0]) setAgentId(defaultAgent || agents[0].id); }, [open, agents, agentId, defaultAgent]);
+  // Default scope: the agent's claimed domains (max 3), else General — not all 20 (that's ~800 answers).
+  useEffect(() => {
+    const ag = agents.find((x) => x.id === agentId);
+    const known = new Set(DOMAINS.map((d) => d.slug));
+    const claimed = ((ag as { claimedDomains?: string[] } | undefined)?.claimedDomains ?? []).filter((d) => known.has(d)).slice(0, 3);
+    setDomains(claimed.length ? claimed : ['general']);
+  }, [agentId, agents]);
+  const estimate = 20 * domains.length * repeats;
   const valid = agentId && domains.length > 0 && repeats >= 1 && repeats <= 5;
   const submit = async () => {
     const r = await run('create', () => api.post<Assessment>('/assessments', { agentId, domainSlugs: domains, repeats }), 'Assessment queued');
@@ -115,8 +123,11 @@ function NewAssessmentModal({ open, onClose, agents, agentsLoading, defaultAgent
           </Field>
         )}
         <Field label="Domains" required><DomainPicker value={domains} onChange={setDomains} /></Field>
-        <Field label="Repeats per question" htmlFor="na-rep" hint="Repeats measure consistency. More repeats → larger sample and higher confidence, but take longer.">
-          <Input id="na-rep" type="number" min={1} max={5} value={repeats} onChange={(e) => setRepeats(Math.max(1, Math.min(5, Number(e.target.value) || 1)))} className="w-28" />
+        <Field label="Depth" htmlFor="na-rep" hint={`≈ ${estimate} answers (approx.: ~20 questions per domain × ${repeats})`}>
+          <Select id="na-rep" value={String(repeats)} onChange={(e) => setRepeats(Number(e.target.value))} className="w-72">
+            <option value="1">Quick (1×) — fastest</option>
+            <option value="2">Full (2×, adds consistency score)</option>
+          </Select>
         </Field>
         <p className="text-xs text-fg-subtle">A domain earns a verified badge only with ≥{QUALITY.MIN_SAMPLE_FOR_VERIFIED} graded responses and ≥{QUALITY.MIN_CONFIDENCE_FOR_VERIFIED * 100}% confidence.</p>
       </div>

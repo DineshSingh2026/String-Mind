@@ -82,6 +82,8 @@ export interface Assessment {
   id: string; agentId: string; agent?: { id: string; name: string } | null; status: 'queued' | 'running' | 'completed' | 'failed' | string;
   progress?: number | null; testsCompleted?: number | null; testsTotal?: number | null; domainSlugs?: string[];
   repeats?: number; overallScore?: number | null; createdAt: string; completedAt?: string | null; error?: string | null;
+  /** async (prompt-agent) runs: { mode: 'async', deadline } — tasks wait for the agent to check in */
+  summary?: { mode?: string; deadline?: string; [k: string]: unknown } | null;
   domains?: { slug: string; name?: string; score: number | null; accuracy?: number | null; confidence?: number | null; sampleSize?: number; verified?: boolean; meetsTarget?: boolean | null }[];
 }
 

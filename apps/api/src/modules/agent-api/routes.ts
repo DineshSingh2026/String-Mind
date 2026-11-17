@@ -15,10 +15,11 @@ import { parse } from '../../lib/http.js';
 import { notify } from '../../lib/notify.js';
 import { emitEvent } from '../../lib/webhooks.js';
 import {
-  MAX_RESULT_CHARS, ONLINE_WINDOW_MS, POLL_SECONDS, PROMPT_METHOD, VERIFY_MAX_ATTEMPTS, agentApiBase, cleanText, computeState,
+  MAX_RESULT_CHARS, ONLINE_WINDOW_MS, POLL_SECONDS, PROMPT_METHOD, VERIFY_MAX_ATTEMPTS, agentApiBase, cleanText, connectUrl, computeState,
   countPendingTasks, enqueueVerifyTask, expireOpenTasks, inboxEvents, isOnline, isShuttingDown, newAgentToken, newNonce,
-  normaliseClaimCode, patchConnConfig, promptConfig, publishConnectionState, resetShutdown, signalShutdown, takeNextTask, waitSignal,
+  normaliseClaimCode, patchConnConfig, promptConfig, publishConnectionState, resetShutdown, signalShutdown, takeNextTask, takeTasks, waitSignal,
 } from '../../lib/agent-inbox.js';
+import { handleAsyncTaskAnswer } from '../../engine/assessment.js';
 import { ensureHealthCheckScheduled } from '../agents/service.js';
 
 type Agent = typeof schema.agents.$inferSelect;
@@ -93,6 +94,48 @@ const ClaimBody = z.object({
 });
 
 const ResultBody = z.object({ text: z.string().max(MAX_RESULT_CHARS, `text must be at most ${MAX_RESULT_CHARS} characters`) });
+const MAX_BATCH_RESULTS = 100;
+const BatchResultBody = z.object({
+  results: z.array(z.object({ id: z.string().max(64), text: z.string() })).min(1).max(MAX_BATCH_RESULTS, `at most ${MAX_BATCH_RESULTS} results per request`),
+});
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type Task = typeof schema.agentTasks.$inferSelect;
+const taskView = (task: Task) => ({
+  id: task.id, kind: task.kind, messages: task.request.messages, system: task.request.system ?? null, deadline: task.deadline.toISOString(),
+});
+
+/** Record the first poll (any task endpoint) so the owner sees "Agent is polling for tasks". */
+async function markFirstSeen(agent: Agent, conn: Connection) {
+  const cfg = promptConfig(conn);
+  if (cfg.firstSeenAt) return;
+  await patchConnConfig(conn.id, { firstSeenAt: new Date().toISOString() });
+  await publishConnectionState(agent.id, agent.orgId, cfg.verifiedAt ? 'connected' : 'verifying');
+}
+
+/** Accept one answer (shared by the single and batch endpoints). Throws AppError (404/409) when it can't be accepted. */
+async function submitResult(agent: Agent, id: string, raw: string): Promise<{ task: Task; verify?: { verified: boolean; message: string } }> {
+  const text = cleanText(raw, MAX_RESULT_CHARS);
+  const [task] = await db().select().from(schema.agentTasks).where(and(eq(schema.agentTasks.id, id), eq(schema.agentTasks.agentId, agent.id))).limit(1);
+  if (!task) throw notFound('Task');
+  if (task.status === 'answered') throw conflict('This task was already answered');
+  if (task.status === 'expired') throw conflict('This task has expired (its deadline passed or the connection was re-keyed)');
+  if (task.deadline.getTime() <= Date.now()) {
+    await db().update(schema.agentTasks).set({ status: 'expired' }).where(eq(schema.agentTasks.id, id));
+    inboxEvents.emit(`task:${id}`);
+    throw conflict('This task has expired (its deadline passed)');
+  }
+  const [answered] = await db().update(schema.agentTasks).set({ status: 'answered', response: text, answeredAt: new Date() })
+    .where(and(eq(schema.agentTasks.id, id), sql`${schema.agentTasks.status} IN ('pending', 'delivered')`)).returning();
+  if (!answered) throw conflict('This task was already answered or has expired');
+  inboxEvents.emit(`task:${id}`);
+  // Async assessment answers are graded on arrival (and the assessment finalized once all are in).
+  if (answered.kind === 'assessment' && answered.meta) {
+    await handleAsyncTaskAnswer(answered).catch((e) => console.error(`[agent-api] grading task ${id} failed`, e));
+  }
+  if (task.kind !== 'verify') return { task: answered };
+  return { task: answered, verify: await handleVerifyAnswer(agent, text) };
+}
 
 /** Single-line, capped, control-char-free text for agent self-reported fields. */
 const line = (s: string | undefined, max: number) => {
@@ -173,13 +216,49 @@ export default async function routes(app: FastifyInstance) {
       agentId: row.agent.id,
       agentName: row.agent.name,
       endpoints: {
+        tasks: `${base}/tasks?limit=50`,
+        results: `${base}/tasks/results`,
         next: `${base}/tasks/next?wait=${POLL_SECONDS}`,
         result: `${base}/tasks/{taskId}/result`,
         heartbeat: `${base}/heartbeat`,
         me: `${base}/me`,
       },
       pollSeconds: POLL_SECONDS,
+      instructions: 'Check-in mode (any chat assistant): whenever your owner asks you to check StringMind, GET endpoints.tasks, '
+        + 'answer every task, POST all answers to endpoints.results, and repeat until no tasks remain. Tasks wait up to 24 hours, '
+        + 'so you do not need to stay online. Always-on mode: long-poll endpoints.next and POST each answer to endpoints.result. '
+        + `Your first task is a verification task. Full guide: ${connectUrl()}`,
     };
+  });
+
+  /* ───────────── batch check-in (chat assistants) ───────────── */
+
+  app.get('/tasks', async (req) => {
+    const { agent, conn } = req.agentCtx!;
+    const { limit } = parse(z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }), req.query);
+    await markFirstSeen(agent, conn);
+    const tasks = await takeTasks(agent.id, limit);
+    return { tasks: tasks.map(taskView), remaining: await countPendingTasks(agent.id) };
+  });
+
+  app.post('/tasks/results', { bodyLimit: 4 * 1024 * 1024 }, async (req) => {
+    const { agent } = req.agentCtx!;
+    const { results } = parse(BatchResultBody, req.body);
+    let accepted = 0;
+    const rejected: { id: string; reason: string }[] = [];
+    let verification: { verified: boolean; message: string } | undefined;
+    for (const r of results) {
+      if (!UUID_RE.test(r.id)) { rejected.push({ id: r.id, reason: 'invalid task id' }); continue; }
+      if (r.text.length > MAX_RESULT_CHARS) { rejected.push({ id: r.id, reason: `text must be at most ${MAX_RESULT_CHARS} characters` }); continue; }
+      try {
+        const out = await submitResult(agent, r.id, r.text);
+        accepted++;
+        if (out.verify) verification = out.verify;
+      } catch (e) {
+        rejected.push({ id: r.id, reason: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    return { accepted, rejected, remaining: await countPendingTasks(agent.id), ...(verification ? { verification } : {}) };
   });
 
   /* ───────────── tasks ───────────── */
@@ -187,11 +266,7 @@ export default async function routes(app: FastifyInstance) {
   app.get('/tasks/next', async (req, reply) => {
     const { agent, conn } = req.agentCtx!;
     const { wait } = parse(z.object({ wait: z.coerce.number().int().min(0).max(POLL_SECONDS).default(POLL_SECONDS) }), req.query);
-    const cfg = promptConfig(conn);
-    if (!cfg.firstSeenAt) {
-      await patchConnConfig(conn.id, { firstSeenAt: new Date().toISOString() });
-      await publishConnectionState(agent.id, agent.orgId, cfg.verifiedAt ? 'connected' : 'verifying');
-    }
+    await markFirstSeen(agent, conn);
     let aborted = false;
     reply.raw.once('close', () => { if (!reply.raw.writableEnded) aborted = true; });
     const until = Date.now() + wait * 1000;
@@ -199,12 +274,7 @@ export default async function routes(app: FastifyInstance) {
       if (aborted) return reply; // client went away — never mark a task delivered to a dead socket
       const task = await takeNextTask(agent.id);
       if (task) {
-        return {
-          task: {
-            id: task.id, kind: task.kind, messages: task.request.messages, system: task.request.system ?? null,
-            deadline: task.deadline.toISOString(),
-          },
-        };
+        return { task: taskView(task) };
       }
       const left = until - Date.now();
       if (left <= 0 || isShuttingDown()) break;
@@ -217,24 +287,9 @@ export default async function routes(app: FastifyInstance) {
   app.post('/tasks/:id/result', async (req) => {
     const { agent } = req.agentCtx!;
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
-    const { text: raw } = parse(ResultBody, req.body);
-    const text = cleanText(raw, MAX_RESULT_CHARS);
-    const [task] = await db().select().from(schema.agentTasks).where(and(eq(schema.agentTasks.id, id), eq(schema.agentTasks.agentId, agent.id))).limit(1);
-    if (!task) throw notFound('Task');
-    if (task.status === 'answered') throw conflict('This task was already answered');
-    if (task.status === 'expired') throw conflict('This task has expired (its deadline passed or the connection was re-keyed)');
-    if (task.deadline.getTime() <= Date.now()) {
-      await db().update(schema.agentTasks).set({ status: 'expired' }).where(eq(schema.agentTasks.id, id));
-      inboxEvents.emit(`task:${id}`);
-      throw conflict('This task has expired (its deadline passed)');
-    }
-    const [answered] = await db().update(schema.agentTasks).set({ status: 'answered', response: text, answeredAt: new Date() })
-      .where(and(eq(schema.agentTasks.id, id), sql`${schema.agentTasks.status} IN ('pending', 'delivered')`)).returning();
-    if (!answered) throw conflict('This task was already answered or has expired');
-    inboxEvents.emit(`task:${id}`);
-
-    if (task.kind !== 'verify') return { ok: true };
-    return { ok: true, ...(await handleVerifyAnswer(agent, text)) };
+    const { text } = parse(ResultBody, req.body);
+    const out = await submitResult(agent, id, text);
+    return out.verify ? { ok: true, ...out.verify } : { ok: true };
   });
 
   app.post('/heartbeat', async (req) => {
