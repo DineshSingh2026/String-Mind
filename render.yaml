@@ -1,0 +1,82 @@
+# Render Blueprint for StringMind (AIX monorepo). Step-by-step guide: docs/DEPLOY_RENDER.md
+#
+#   stringmind-db   managed PostgreSQL (pgvector is available; the API runs CREATE EXTENSION vector on boot)
+#   stringmind-api  Fastify API  (apps/api, TypeScript run with tsx)   → https://stringmind-api.onrender.com
+#   stringmind-web  Next.js web  (apps/web, proxies /api/* to the API) → https://stringmind-web.onrender.com
+#
+# Variables marked `sync: false` are prompted for when you create the Blueprint (Render never stores them in git).
+# If Render gives a service a different URL than the names above (name already taken → random suffix),
+# use the real URLs for WEB_ORIGIN / AIX_API_URL.
+
+databases:
+  - name: stringmind-db
+    databaseName: stringmind
+    user: stringmind
+    # Cheapest paid plan (persistent, backups). `free` also works for a trial but expires after 30 days.
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: [] # no external connections; the API uses the internal URL
+
+services:
+  - type: web
+    name: stringmind-api
+    runtime: node
+    # `free` works for a demo (sleeps after ~15 min idle → background jobs pause, first request is slow).
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm run start -w @aix/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      # Internal connection string (no TLS needed inside Render's private network).
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stringmind-db
+          property: connectionString
+      - key: DB_POOL_MAX
+        value: "10"
+      # 64 hex chars. Generate: openssl rand -hex 32   (Render's generateValue makes base64, which is rejected)
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      # Must not be the dev default — the API refuses to start otherwise.
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Public URL of the web service, e.g. https://stringmind-web.onrender.com (host-only is accepted; https:// is added)
+      - key: WEB_ORIGIN
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SEED_DEMO
+        value: "true"
+      - key: FIAT_ENABLED
+        value: "false"
+      - key: LOG_LEVEL
+        value: info
+      - key: STORAGE_DIR
+        value: ./storage
+
+  - type: web
+    name: stringmind-web
+    runtime: node
+    plan: starter
+    # --include=dev: Next needs typescript/tailwind/postcss at build time, and NODE_ENV=production would skip them.
+    buildCommand: npm ci --include=dev && npm run build -w @aix/web
+    startCommand: npm run start -w @aix/web
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      # Public URL of the API service, e.g. https://stringmind-api.onrender.com — needed at BUILD time (rewrites are
+      # compiled by `next build`). Also used to derive the browser WebSocket URL (wss://<api-host>/ws).
+      - key: AIX_API_URL
+        sync: false
+      # Optional (add in the dashboard only if needed): NEXT_PUBLIC_WS_URL=wss://<api-host>/ws — by default it is
+      # derived from AIX_API_URL at build time.

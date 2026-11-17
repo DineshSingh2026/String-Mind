@@ -1,0 +1,27 @@
+# dependencies / build output
+node_modules
+.next
+dist
+out
+*.tsbuildinfo
+coverage
+
+# secrets — never commit real env files (the *.env.example files ARE committed)
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/web/.env.local
+*.pem
+
+# local data (embedded PGlite database, uploaded knowledge files)
+.data
+apps/api/.data
+storage
+apps/api/storage
+
+# logs / OS cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

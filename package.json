@@ -1,0 +1,22 @@
+{
+  "name": "aix",
+  "private": true,
+  "version": "0.1.0",
+  "description": "StringMind - Agent Intelligence Exchange",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @aix/api",
+    "dev:web": "npm run dev -w @aix/web",
+    "build": "npm run build -w @aix/shared && npm run build -w @aix/api && npm run build -w @aix/web",
+    "typecheck": "npm run typecheck -w @aix/shared && npm run typecheck -w @aix/api && npm run typecheck -w @aix/web",
+    "test": "npm run test -w @aix/api",
+    "db:reset": "npm run db:reset -w @aix/api",
+    "seed": "npm run seed -w @aix/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": { "node": ">=20" }
+}

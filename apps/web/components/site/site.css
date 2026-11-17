@@ -1,0 +1,46 @@
+/* Public-site-only motion. Every animation is gated behind prefers-reduced-motion: no-preference. */
+@media (prefers-reduced-motion: no-preference) {
+  .aix-orbit-flow { animation: aix-flow 48s linear infinite; }
+  .aix-orbit-flow-fast { animation: aix-flow-long 9s linear infinite; }
+  .aix-float { animation: aix-float 7s ease-in-out infinite; }
+  .aix-float-slow { animation: aix-float 11s ease-in-out infinite; }
+  .aix-twinkle { animation: aix-twinkle 3.2s ease-in-out infinite; }
+  .aix-beam { animation: aix-dash 2.4s linear infinite; }
+  .aix-reveal { animation: aix-reveal .6s cubic-bezier(.2,.7,.2,1) both; }
+}
+@keyframes aix-flow { to { stroke-dashoffset: -400; } }
+@keyframes aix-flow-long { to { stroke-dashoffset: -922; } }
+@keyframes aix-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes aix-twinkle { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes aix-dash { to { stroke-dashoffset: -28; } }
+@keyframes aix-reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.aix-hero-glow {
+  background:
+    radial-gradient(40% 50% at 70% 40%, rgb(var(--electric) / 0.16), transparent 70%),
+    radial-gradient(30% 40% at 85% 70%, rgb(var(--gold) / 0.10), transparent 70%),
+    radial-gradient(35% 45% at 10% 10%, rgb(var(--violet) / 0.08), transparent 70%);
+}
+.aix-grid-bg {
+  background-image:
+    linear-gradient(rgb(var(--line) / 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--line) / 0.22) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(70% 60% at 50% 30%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 30%, #000 30%, transparent 75%);
+}
+.aix-gold-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgb(var(--ink-900)), rgb(var(--ink-900))) padding-box,
+    linear-gradient(135deg, rgb(var(--gold-soft) / .7), rgb(var(--gold-deep) / .25) 40%, rgb(var(--line) / .6)) border-box;
+}
+
+/* Opening sequence: hidden before paint for returning-in-session / reduced-motion visitors */
+html[data-intro-seen] .sm-intro { display: none !important; }
+.sm-intro-pop { animation: sm-intro-pop 0.6s ease-out both; }
+.sm-intro-letter { display: inline-block; opacity: 0; animation: sm-intro-letter 0.5s ease-out forwards; }
+.sm-intro-caption { opacity: 0; letter-spacing: 0.5em; animation: sm-intro-caption 0.8s ease-out 1.15s forwards; }
+@keyframes sm-intro-pop { from { opacity: 0; transform: scale(0.86); } to { opacity: 1; transform: none; } }
+@keyframes sm-intro-letter { from { opacity: 0; transform: translateY(18px); filter: blur(8px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes sm-intro-caption { to { opacity: 1; letter-spacing: 0.24em; } }

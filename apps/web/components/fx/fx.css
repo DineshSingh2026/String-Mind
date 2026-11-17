@@ -1,0 +1,93 @@
+/* StringMind FX library — keyframes & helper classes. Every loop is gated behind prefers-reduced-motion: no-preference. */
+
+.fx-shimmer {
+  background-image: linear-gradient(100deg,
+    rgb(var(--gold-deep)) 0%, rgb(var(--gold)) 22%, rgb(var(--gold-soft)) 38%, #fff8e6 46%,
+    rgb(var(--gold-soft)) 54%, rgb(var(--gold)) 70%, rgb(var(--gold-deep)) 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fx-aurora-blob { position: absolute; border-radius: 9999px; filter: blur(64px); will-change: transform; }
+.fx-grid-plane {
+  position: absolute; left: -50%; right: -50%; bottom: -10%; height: 140%;
+  background-image:
+    linear-gradient(rgb(var(--electric) / 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--electric) / 0.12) 1px, transparent 1px);
+  background-size: 64px 64px;
+  transform: perspective(700px) rotateX(62deg);
+  transform-origin: 50% 100%;
+}
+.fx-grid-flat {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgb(var(--line) / 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--line) / 0.28) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+.fx-fade-mask {
+  mask-image: radial-gradient(70% 65% at 50% 40%, #000 25%, transparent 78%);
+  -webkit-mask-image: radial-gradient(70% 65% at 50% 40%, #000 25%, transparent 78%);
+}
+.fx-scanline {
+  position: absolute; left: 0; right: 0; height: 120px; top: -120px;
+  background: linear-gradient(to bottom, transparent, rgb(var(--electric) / 0.04) 75%, rgb(var(--electric-soft) / 0.10) 99%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+.fx-divider { position: relative; height: 1px; overflow: hidden;
+  background: linear-gradient(90deg, transparent, rgb(var(--line)) 20%, rgb(var(--line)) 80%, transparent); }
+.fx-divider::after { content: ''; position: absolute; inset: 0; width: 30%;
+  background: linear-gradient(90deg, transparent, rgb(var(--gold-soft) / .9), rgb(var(--electric) / .7), transparent); transform: translateX(-120%); }
+
+.fx-marquee { display: flex; width: max-content; }
+.fx-marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* animated conic border used by SpotlightCard */
+@property --fx-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.fx-border-spin {
+  position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--fx-angle), transparent 0deg, var(--fx-glow) 60deg, transparent 140deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity .4s ease;
+}
+.fx-spot:hover .fx-border-spin, .fx-spot:focus-within .fx-border-spin { opacity: 1; }
+
+.fx-pulse-ring { position: absolute; inset: 0; border-radius: 9999px; border: 1px solid currentColor; opacity: 0; }
+.fx-caret { display: inline-block; width: .55em; height: 1.05em; vertical-align: -0.15em; background: rgb(var(--gold)); margin-left: 1px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .fx-shimmer { animation: fx-shimmer 5.5s cubic-bezier(.45,.05,.3,1) infinite; }
+  .fx-aurora-a { animation: fx-drift-a 22s ease-in-out infinite alternate; }
+  .fx-aurora-b { animation: fx-drift-b 28s ease-in-out infinite alternate; }
+  .fx-aurora-c { animation: fx-drift-c 34s ease-in-out infinite alternate; }
+  .fx-grid-move { animation: fx-grid 6s linear infinite; }
+  .fx-scanline { animation: fx-scan 7s cubic-bezier(.5,0,.5,1) infinite; }
+  .fx-divider::after { animation: fx-sweep 5s ease-in-out infinite; }
+  .fx-marquee { animation: fx-marquee var(--fx-dur, 40s) linear infinite; }
+  .fx-marquee.fx-reverse { animation-direction: reverse; }
+  .fx-marquee-wrap:hover .fx-marquee, .fx-marquee-wrap:focus-within .fx-marquee { animation-play-state: paused; }
+  .fx-spot:hover .fx-border-spin { animation: fx-spin 4s linear infinite; }
+  .fx-pulse-ring { animation: fx-ring 2.4s cubic-bezier(.2,.6,.3,1) infinite; }
+  .fx-caret { animation: fx-blink 1s steps(1) infinite; }
+  .fx-float { animation: fx-float 8s ease-in-out infinite; }
+}
+@keyframes fx-shimmer { 0% { background-position: 100% 0; } 55%, 100% { background-position: -50% 0; } }
+@keyframes fx-drift-a { from { transform: translate3d(-6%, -4%, 0) scale(1); } to { transform: translate3d(8%, 6%, 0) scale(1.15); } }
+@keyframes fx-drift-b { from { transform: translate3d(5%, 3%, 0) scale(1.1); } to { transform: translate3d(-9%, -6%, 0) scale(.92); } }
+@keyframes fx-drift-c { from { transform: translate3d(0, 6%, 0) scale(.95); } to { transform: translate3d(6%, -8%, 0) scale(1.12); } }
+@keyframes fx-grid { to { background-position: 0 64px, 0 0; } }
+@keyframes fx-scan { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(calc(100vh + 240px)); opacity: 0; } }
+@keyframes fx-sweep { 0% { transform: translateX(-120%); } 60%, 100% { transform: translateX(360%); } }
+@keyframes fx-marquee { to { transform: translate3d(-50%, 0, 0); } }
+@keyframes fx-spin { to { --fx-angle: 360deg; } }
+@keyframes fx-ring { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes fx-blink { 50% { opacity: 0; } }
+@keyframes fx-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }

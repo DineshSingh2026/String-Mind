@@ -1,0 +1,75 @@
+/* Public inner-page effects (owned by components/site/pages). Motion is gated behind prefers-reduced-motion: no-preference. */
+@property --aix-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+/* Animated conic gradient border. Usage: <div class="aix-conic-border rounded-3xl"> */
+.aix-conic-border {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgb(var(--ink-900)), rgb(var(--ink-900))) padding-box,
+    conic-gradient(from var(--aix-angle), rgb(var(--gold-soft) / .9), rgb(var(--gold-deep) / .15) 25%, rgb(var(--electric) / .55) 50%, rgb(var(--violet) / .2) 75%, rgb(var(--gold-soft) / .9)) border-box;
+}
+.aix-conic-border-ai {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgb(var(--ink-900)), rgb(var(--ink-900))) padding-box,
+    conic-gradient(from var(--aix-angle), rgb(var(--electric) / .8), rgb(var(--violet) / .15) 30%, rgb(var(--violet) / .7) 60%, rgb(var(--line) / .4) 80%, rgb(var(--electric) / .8)) border-box;
+}
+
+/* Shimmer skeleton */
+.aix-shimmer {
+  position: relative; overflow: hidden; background: rgb(var(--ink-800) / .8);
+}
+.aix-shimmer::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .06), transparent);
+}
+
+/* Fine grain overlay for depth */
+.aix-grain::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .035; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Glass panel with inner highlight */
+.aix-panel {
+  border: 1px solid rgb(var(--line) / .6);
+  background: linear-gradient(180deg, rgb(var(--ink-850) / .85), rgb(var(--ink-900) / .75));
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / .05) inset, 0 30px 60px -30px rgb(0 0 0 / .7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Dotted surface */
+.aix-dots {
+  background-image: radial-gradient(rgb(var(--line) / .55) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* Range input styling (commission calculator) */
+.aix-range { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; cursor: pointer; }
+.aix-range:focus { outline: none; }
+.aix-range::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: linear-gradient(90deg, rgb(var(--gold)) 0 var(--fill, 50%), rgb(var(--ink-700)) var(--fill, 50%) 100%); }
+.aix-range::-moz-range-track { height: 6px; border-radius: 999px; background: rgb(var(--ink-700)); }
+.aix-range::-moz-range-progress { height: 6px; border-radius: 999px; background: rgb(var(--gold)); }
+.aix-range::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -8px; height: 22px; width: 22px; border-radius: 999px; background: rgb(var(--gold-soft)); border: 3px solid rgb(var(--ink-950)); box-shadow: 0 0 0 1px rgb(var(--gold) / .7), 0 6px 18px -4px rgb(var(--gold) / .7); }
+.aix-range::-moz-range-thumb { height: 18px; width: 18px; border-radius: 999px; background: rgb(var(--gold-soft)); border: 3px solid rgb(var(--ink-950)); box-shadow: 0 0 0 1px rgb(var(--gold) / .7); }
+.aix-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--electric)); }
+.aix-range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--electric)); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .aix-conic-border, .aix-conic-border-ai { animation: aix-spin-angle 6s linear infinite; }
+  .aix-shimmer::after { animation: aix-shimmer 1.6s ease-in-out infinite; }
+  .aix-caret { animation: aix-caret 1s steps(1) infinite; }
+  .aix-pulse-ring { animation: aix-pulse-ring 2.4s ease-out infinite; }
+  .aix-dash-flow { animation: aix-dash-flow 1.8s linear infinite; }
+  .aix-spin-slow { animation: aix-spin 40s linear infinite; }
+  .aix-spin-slower { animation: aix-spin 70s linear infinite reverse; }
+}
+@keyframes aix-spin-angle { to { --aix-angle: 360deg; } }
+@keyframes aix-shimmer { to { transform: translateX(100%); } }
+@keyframes aix-caret { 50% { opacity: 0; } }
+@keyframes aix-pulse-ring { 0% { transform: scale(.85); opacity: .7; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes aix-dash-flow { to { stroke-dashoffset: -24; } }
+@keyframes aix-spin { to { transform: rotate(360deg); } }
