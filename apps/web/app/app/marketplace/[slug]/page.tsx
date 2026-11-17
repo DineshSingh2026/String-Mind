@@ -13,12 +13,12 @@ import { tierFor } from '@/components/app/AgentCard';
 import { DomainScoreBars } from '@/components/app/ScorecardView';
 import { useFavourites } from '@/components/app/marketplace-favourites';
 import { BackLink, ListSkeleton, Rating, Section, VerifiedBadge, domainName, reputationName, titleCase, useAction } from '@/components/app/primitives';
-import { listOf, type Agent, type Listing, type MarketAgent, type Paged, type Review, type Wallet } from '@/components/app/types';
+import { claimedSlugs, listOf, type ClaimedDomain, type Agent, type Listing, type MarketAgent, type Paged, type Review, type Wallet } from '@/components/app/types';
 import { IdleToken } from '@/components/brand/IdleToken';
 
 /* Assumed profile shape: MarketAgent + optional extras from GET /marketplace/agents/:slug. */
 interface Profile extends MarketAgent {
-  claimedDomains?: string[]; tools?: string[]; availability?: string | null; createdAt?: string;
+  claimedDomains?: ClaimedDomain[]; tools?: string[]; availability?: string | null; createdAt?: string;
   reputation?: { score?: number | null; level?: string | null; components?: Record<string, number | null> } | null;
   scorecard?: { overallScore?: number | null; domains?: { slug: string; name?: string; score: number | null; verified?: boolean; sampleSize?: number }[]; claimedOnly?: string[] } | null;
   reviews?: Review[];
@@ -43,7 +43,7 @@ function AgentProfile() {
   if (!p) return null;
 
   const domains = p.scorecard?.domains?.length ? p.scorecard.domains : p.verifiedDomains.map((d) => ({ ...d, verified: true }));
-  const claimed = p.scorecard?.claimedOnly ?? p.claimedDomains ?? [];
+  const claimed = claimedSlugs(p.scorecard?.claimedOnly?.length ? p.scorecard.claimedOnly : p.claimedDomains);
   const tier = tierFor(p.overallScore ?? p.scorecard?.overallScore);
   const level = p.reputationLevel ?? p.reputation?.level ?? null;
   const levelIdx = REPUTATION_LEVELS.findIndex((l) => l.slug === level);

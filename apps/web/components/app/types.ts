@@ -29,7 +29,7 @@ export interface Agent {
   id: string; slug?: string; name: string; description?: string | null; avatarUrl?: string | null;
   status: AgentStatus; health?: 'healthy' | 'degraded' | 'down' | 'unknown' | string | null;
   isPublic?: boolean; modelName?: string; modelVersion?: string | null; role?: string | null;
-  instructions?: string | null; languages?: string[]; claimedDomains?: string[]; tools?: string[];
+  instructions?: string | null; languages?: string[]; claimedDomains?: ClaimedDomain[]; tools?: string[];
   provider?: { slug: string; name: string };
   connection?: { method: ConnectionMethod | string; status: string; credentialLast4?: string | null; lastTestedAt?: string | null; lastError?: string | null; endpointUrl?: string | null } | null;
   overallScore?: number | null;
@@ -97,4 +97,13 @@ export interface NotificationItem { id: string; type: string; title: string; bod
 export function reputationLevel(r: Agent['reputation']): string | null {
   if (!r || typeof r === 'number') return null;
   return r.level ?? null;
+}
+
+/**
+ * Claimed (self-reported) domains arrive as slugs from some endpoints and as `{ slug, name, claimed }`
+ * objects from the marketplace. Normalise to slugs so rendering can never receive an object.
+ */
+export type ClaimedDomain = string | { slug: string; name?: string; claimed?: boolean };
+export function claimedSlugs(list: readonly ClaimedDomain[] | null | undefined): string[] {
+  return (list ?? []).map((c) => (typeof c === 'string' ? c : c?.slug)).filter((s): s is string => typeof s === 'string' && s.length > 0);
 }

@@ -4,15 +4,15 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Info, MinusCircle, Target } fr
 import { QUALITY, SCORING_DIMENSIONS } from '@aix/shared';
 import { Badge, Button, EmptyState, ScoreRing, cn, fmtCredits, fmtDateTime, fmtNumber } from '@/components/ui';
 import { VerifiedBadge, domainName, titleCase } from './primitives';
-import type { Scorecard, ScorecardDomain } from './types';
+import { claimedSlugs, type ClaimedDomain, type Scorecard, type ScorecardDomain } from './types';
 
 const pct = (v: number | null | undefined, d = 0) => (v == null ? '—' : `${v.toFixed(d)}%`);
 /** Confidence may arrive as 0..1 or 0..100. */
 export const confPct = (c: number | null | undefined) => (c == null ? null : c <= 1 ? c * 100 : c);
 
 /** Per-domain verified score bars; optional claimed domains listed separately and labelled. */
-export function DomainScoreBars({ domains, claimed, compact }: { domains: { slug: string; name?: string; score: number | null; verified?: boolean; sampleSize?: number }[]; claimed?: string[]; compact?: boolean }) {
-  const claimedOnly = (claimed ?? []).filter((c) => !domains.some((d) => d.slug === c && d.score != null));
+export function DomainScoreBars({ domains, claimed, compact }: { domains: { slug: string; name?: string; score: number | null; verified?: boolean; sampleSize?: number }[]; claimed?: ClaimedDomain[]; compact?: boolean }) {
+  const claimedOnly = claimedSlugs(claimed).filter((c) => !domains.some((d) => d.slug === c && d.score != null));
   return (
     <div className="space-y-4">
       {domains.length > 0 && (

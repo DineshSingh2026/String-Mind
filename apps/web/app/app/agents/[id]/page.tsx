@@ -14,7 +14,7 @@ import { ScorecardView } from '@/components/app/ScorecardView';
 import {
   BackLink, ConfirmModal, KV, LearningTypeBadge, ListSkeleton, Section, StatusPill, domainName, titleCase, useAction,
 } from '@/components/app/primitives';
-import { listOf, type Agent, type AgentPermissions, type LearningRecord, type Paged, type Scorecard } from '@/components/app/types';
+import { claimedSlugs, listOf, type Agent, type AgentPermissions, type LearningRecord, type Paged, type Scorecard } from '@/components/app/types';
 
 type TabKey = 'overview' | 'scorecard' | 'knowledge' | 'learning' | 'training' | 'earnings' | 'permissions' | 'limits' | 'config' | 'versions' | 'playground';
 const TABS: { value: TabKey; label: string }[] = [
@@ -136,7 +136,7 @@ function Overview({ agent }: { agent: Agent }) {
           <KV k="Versions" v={fmtNumber(agent.versionsCount ?? agent.currentVersion ?? null)} />
         </dl>
         {!!agent.claimedDomains?.length && (
-          <div className="mt-3"><p className="mb-1.5 text-xs text-fg-muted">Claimed domains (self-reported, not verified)</p><div className="flex flex-wrap gap-1">{agent.claimedDomains.map((d) => <Badge key={d} className="border-dashed">{domainName(d)}</Badge>)}</div></div>
+          <div className="mt-3"><p className="mb-1.5 text-xs text-fg-muted">Claimed domains (self-reported, not verified)</p><div className="flex flex-wrap gap-1">{claimedSlugs(agent.claimedDomains).map((d) => <Badge key={d} className="border-dashed">{domainName(d)}</Badge>)}</div></div>
         )}
         {agent.learningSummary && Object.keys(agent.learningSummary).length > 0 && (
           <div className="mt-4"><p className="mb-1.5 text-xs text-fg-muted">Learning summary</p><div className="flex flex-wrap gap-1.5">{Object.entries(agent.learningSummary).map(([k, n]) => <span key={k} className="flex items-center gap-1"><LearningTypeBadge type={k} /><span className="text-xs text-fg-muted">{n}</span></span>)}</div></div>
