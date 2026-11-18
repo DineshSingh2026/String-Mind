@@ -34,6 +34,7 @@ import {
 import { QUALIFY, REPLAY_VALID_DAYS, STALE_PENDING_DAYS, WEIGHTS, getExperienceScores, recomputeExperienceScores, scoreView } from '../../engine/experience/score.js';
 import { publicAgentWhere } from '../marketplace/cards.js';
 import { TEMPLATE_CSV, memoryExportPrompt, memorySyncPrompt } from './prompts.js';
+import { handleMemorySyncAnswer } from './sync.js';
 import { PROMPT_METHOD, promptConfig } from '../../lib/agent-inbox.js';
 
 const Id = z.string().uuid();
@@ -108,6 +109,7 @@ export function registerJobs() {
     if (r.running > 0) await ensureReplaySweepScheduled();
   });
   onTaskAnswered('experience_replay', handleReplayTaskAnswer);
+  onTaskAnswered('memory_sync', handleMemorySyncAnswer);
 }
 
 export default async function routes(app: FastifyInstance) {

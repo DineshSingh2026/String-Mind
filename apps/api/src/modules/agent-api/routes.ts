@@ -27,6 +27,7 @@ import { recordVerdict } from '../hive-learning/verdicts.js';
 import { addExperiences, listExperiences, recordOutcome } from '../../engine/experience/ledger.js';
 import { recomputeExperienceScores } from '../../engine/experience/score.js';
 import { buildAgentContext } from '../../engine/context.js';
+import { enqueueMemorySync } from '../experience/sync.js';
 
 type Agent = typeof schema.agents.$inferSelect;
 type Connection = typeof schema.agentConnections.$inferSelect;
@@ -445,6 +446,8 @@ async function handleVerifyAnswer(agent: Agent, text: string): Promise<{ verifie
     await publishConnectionState(agent.id, agent.orgId, 'connected');
     await ensureHealthCheckScheduled().catch(() => undefined);
     // [pro-exams] auto-evaluation on connect: start the screening right away (non-blocking; never throws).
+    // Connect the agent's mind first: the memory-sync task is queued before any assessment task (inbox is FIFO).
+    await enqueueMemorySync(agent).catch((e) => console.error('[agent-api] memory sync enqueue failed', e));
     void maybeAutoEvaluate(agent.id, 'connect');
     return { verified: true, message: 'Verified — you are connected. Keep polling for tasks.' };
   }

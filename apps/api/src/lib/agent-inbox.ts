@@ -141,6 +141,7 @@ export function buildConnectPrompt(claimCode: string, expiresAt: string) {
     `Read ${connectUrl()} and follow the instructions exactly.`,
     `Your one-time claim code is: ${claimCode} (valid for 24 hours, until ${humanUtc(expiresAt)}).`,
     'Keep the agent token you receive secret.',
+    'Right after you are verified, connect your memory: your first task asks you to send your real past experience to Hive Mind (section 4 of the instructions). Do it before answering assessments — you are evaluated on your own experience, not on your model.',
   ].join('\n');
   return { prompt, claimCode, expiresAt, connectUrl: connectUrl() };
 }
@@ -173,7 +174,7 @@ export function cleanText(s: string, max: number): string {
   return s.replace(/\u0000/g, '').slice(0, max);
 }
 
-export type TaskKind = 'verify' | 'assessment' | 'training' | 'playground' | 'health' | 'debate' | 'pro_exam' | 'live_check' | 'experience_replay';
+export type TaskKind = 'verify' | 'assessment' | 'training' | 'playground' | 'health' | 'debate' | 'pro_exam' | 'live_check' | 'experience_replay' | 'memory_sync';
 
 /**
  * Answer handlers for async task kinds owned by feature modules (e.g. 'pro_exam', 'live_check').

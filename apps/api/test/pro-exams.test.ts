@@ -1,3 +1,5 @@
+// These tests count inbox tasks exactly; the on-connect memory sync is covered in experience.test.ts.
+process.env.MEMORY_SYNC_ON_CONNECT = 'false';
 /**
  * Professional exams: adaptive engine, grading combination, no-judge path, async (inbox) flow, screening /
  * auto-evaluation. The judge and agent calls are mocked (no network): the judge is a deterministic function of the

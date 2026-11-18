@@ -1,3 +1,5 @@
+// These tests count inbox tasks exactly; the on-connect memory sync is covered in experience.test.ts.
+process.env.MEMORY_SYNC_ON_CONNECT = 'false';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';

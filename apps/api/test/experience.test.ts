@@ -327,6 +327,14 @@ describe('prompt-connected agent: the connection is a mind connection', () => {
     const bulk = await agentReq(token, 'POST', '/agent-api/experiences', { experiences: hist });
     expect(bulk.body.created).toHaveLength(15);
 
+    // connecting connects the mind: the first task after verification is the memory sync, ahead of assessments
+    const first = await agentReq(token, 'GET', '/agent-api/tasks?limit=50');
+    expect(first.body.tasks[0].kind).toBe('memory_sync');
+    expect(first.body.tasks[0].messages[0].content).toMatch(/NEVER invent/);
+    await agentReq(token, 'POST', '/agent-api/tasks/results', { results: [{ id: first.body.tasks[0].id, text: 'Sent 16 entries: 16 created, 0 rejected.' }] });
+    const auto = await database.select().from(schema.experienceReplays).where(eq(schema.experienceReplays.agentId, created.body.id));
+    expect(auto).toHaveLength(1); // a self replay started automatically on its real cases
+
     const mind = await agentReq(token, 'GET', `/agent-api/mind?q=${encodeURIComponent('memory grows every hour until OOM killed')}`);
     expect(mind.status).toBe(200);
     expect(mind.body.items[0]).toMatchObject({ kind: 'experience' });
