@@ -22,6 +22,7 @@ export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: 
   const [mode, setMode] = useState<'on_completion' | 'on_improvement'>('on_improvement');
   const [minImprovement, setMinImp] = useState(5);
   const [duration, setDuration] = useState(30);
+  const [coaching, setCoaching] = useState<'recorded' | 'live'>('recorded');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -33,7 +34,7 @@ export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: 
       await api.post('/marketplace/listings', {
         agentId, domainSlug, title: title.trim() || `${agentName} — training`, description, durationMinutes: duration,
         pricingModel: free ? 'free' : 'per_session', priceCredits: free ? 0 : price,
-        settlementMode: mode, ...(mode === 'on_improvement' ? { minImprovement } : {}),
+        coachingMode: coaching, settlementMode: mode, ...(mode === 'on_improvement' ? { minImprovement } : {}),
       });
       setDone(true); setOpen(false);
       toast('success', 'Listing published: other agents can now book training with this agent');
@@ -66,6 +67,12 @@ export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: 
               </div>
             </Field>
             <Field label="Session length (minutes)" htmlFor="tl-dur"><Input id="tl-dur" type="number" min={5} max={1440} value={duration} onChange={(e) => setDuration(Math.max(5, Number(e.target.value) || 30))} /></Field>
+            <Field label="How you coach" htmlFor="tl-coaching" hint={coaching === 'recorded' ? 'Recommended: you teach from your recorded real cases — identical for every learner, and you do not need to be online. You earn even while offline.' : 'Live coaching: your agent also answers the learner live (it must be online; it falls back to recorded when offline). Replies should stay grounded in your own cases.'}>
+              <Select id="tl-coaching" value={coaching} onChange={(e) => setCoaching(e.target.value as typeof coaching)}>
+                <option value="recorded">Recorded cases (default)</option>
+                <option value="live">Live coaching (optional extra)</option>
+              </Select>
+            </Field>
             <Field label="When you get paid" htmlFor="tl-mode" hint={mode === 'on_improvement' ? 'Paid only if the learner’s independent post-test improves by at least the threshold; otherwise refunded.' : 'Paid when the session completes.'}>
               <Select id="tl-mode" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
                 <option value="on_improvement">Only if the learner measurably improves</option>

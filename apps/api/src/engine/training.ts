@@ -260,6 +260,15 @@ function domainScore(a: typeof schema.capabilityAssessments.$inferSelect, slug: 
 
 /* ───────────────────────────── experience mode ───────────────────────────── */
 
+/** Coaching mode of the listing a session was booked from ('recorded' when booked without a listing). */
+async function coachingModeOf(session: Pick<Session, 'requestId'>): Promise<'recorded' | 'live'> {
+  if (!session.requestId) return 'recorded';
+  const [row] = await db().select({ mode: schema.marketplaceListings.coachingMode }).from(schema.trainingRequests)
+    .innerJoin(schema.marketplaceListings, eq(schema.marketplaceListings.id, schema.trainingRequests.listingId))
+    .where(eq(schema.trainingRequests.id, session.requestId)).limit(1);
+  return row?.mode === 'live' ? 'live' : 'recorded';
+}
+
 /** Max held-back cases per session (the rest are taught). */
 const HELD_OUT_MAX = 10;
 /** Minimum teaching cases for experience mode. */
@@ -918,25 +927,31 @@ export async function runTrainingSession(sessionId: string): Promise<void> {
     if (!domain) throw new Error('Domain not found');
     const learnerOffline = await promptAgentOfflineReason(session.learnerAgentId);
     if (learnerOffline) { await failSession(sessionId, `The learner agent is not available for a live session. ${learnerOffline}`); return; }
-    // The trainer does NOT have to be online: its experience is stored on Hive Mind, so an offline trainer teaches from
-    // its recorded cases (experience mode). Without enough recorded cases a live trainer is still required.
+    const r = new Runner(session, runId, learner.agent, trainer.agent, trainer.adapter, domain);
+    // Experience mode (the trainer has enough recorded real cases) is RECORDED by default: the trainer teaches from its
+    // recorded cases, the same for every learner, and does not need to be online. Live coaching (the trainer agent
+    // answering live) happens only when the listing asks for it AND the trainer is online; otherwise it falls back to
+    // recorded. Without enough recorded cases the benchmark flow needs a live trainer.
+    await r.decideMode();
     const trainerOffline = await promptAgentOfflineReason(session.trainerAgentId);
-    if (trainerOffline && (session.plan as Plan).trainerRecorded !== true) {
-      let plan = session.plan as Plan;
-      if (!plan.mode) {
-        const split = await planExperienceSplit(session, domain.slug);
-        if (split) { await patchPlan(sessionId, { mode: 'experience', heldOutIds: split.heldOutIds, teachingIds: split.teachingIds }); plan = { ...plan, mode: 'experience' }; }
+    if (!r.plan.trainerRecorded) {
+      if (r.experienceMode) {
+        const wantsLive = (await coachingModeOf(session)) === 'live';
+        if (!wantsLive || trainerOffline) {
+          await patchPlan(sessionId, { trainerRecorded: true });
+          await logMessage({
+            sessionId, senderRole: 'system', stage: session.stage,
+            content: wantsLive
+              ? `${trainer.agent.name} is offline, so live coaching falls back to its recorded real cases on Hive Mind. The learner is measured on the trainer's held-back cases as usual.`
+              : `Recorded coaching: ${trainer.agent.name} teaches from its recorded real cases — the same cases and the same held-back measurement for every learner. The trainer does not need to be online and still earns on completion.`,
+            metadata: { trainerRecorded: true, coaching: wantsLive ? 'live_fallback' : 'recorded' },
+          });
+          r.session = (await loadSession(sessionId)) ?? r.session;
+        }
+      } else if (trainerOffline) {
+        await failSession(sessionId, `The trainer agent is not available for a live session and has too few recorded real cases in ${domain.name} to teach from its recorded experience. ${trainerOffline}`); return;
       }
-      if (plan.mode !== 'experience') { await failSession(sessionId, `The trainer agent is not available for a live session and has too few recorded real cases in ${domain.name} to teach offline. ${trainerOffline}`); return; }
-      await patchPlan(sessionId, { trainerRecorded: true });
-      await logMessage({
-        sessionId, senderRole: 'system', stage: session.stage,
-        content: `${trainer.agent.name} is offline, so it teaches from its recorded real cases on Hive Mind (no live trainer replies). The learner is measured on the trainer's held-back cases as usual; the trainer still earns on completion.`,
-        metadata: { trainerRecorded: true },
-      });
     }
-    const live = (await loadSession(sessionId)) ?? session;
-    const r = new Runner(live, runId, learner.agent, trainer.agent, trainer.adapter, domain);
     const stages: Record<TrainingStage, () => Promise<StageResult>> = {
       introduction: () => r.introduction(),
       knowledge_sharing: () => r.knowledgeSharing(),

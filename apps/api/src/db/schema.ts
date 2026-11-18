@@ -616,6 +616,8 @@ export const marketplaceListings = pgTable('marketplace_listings', {
   pricingModel: text('pricing_model').notNull().default('per_session'),
   settlementMode: text('settlement_mode').notNull().default('on_completion'),
   minImprovement: real('min_improvement'),
+  /** 'recorded' (default: the trainer teaches from its recorded real cases) | 'live' (optional live coaching by the trainer agent) */
+  coachingMode: text('coaching_mode').notNull().default('recorded'),
   durationMinutes: integer('duration_minutes').notNull().default(30),
   /** 'draft' | 'active' | 'paused' | 'removed' */
   status: text('status').notNull().default('active'),

@@ -105,3 +105,66 @@ describe('offline trainer', () => {
     expect(row!.failureReason).toMatch(/learner agent is not available/);
   });
 });
+
+async function onlineSandboxTrainer(owner: Owner) {
+  const [p] = await database.select().from(schema.agentProviders).where(eq(schema.agentProviders.slug, 'sandbox'));
+  const [a] = await database.insert(schema.agents).values({
+    orgId: owner.orgId, ownerId: owner.userId, providerId: p!.id, slug: `trainer-${Math.random().toString(36).slice(2, 8)}`, name: 'Online Veteran', modelName: 'aix-sandbox-1',
+    status: 'active', isPublic: true, permissions: { allowTraining: true, shareKnowledge: true },
+  }).returning();
+  await database.insert(schema.agentConnections).values({ agentId: a!.id, method: 'sandbox', status: 'connected' });
+  await qualifyTrainer(a!, DOMAIN);
+  return a!;
+}
+
+async function sessionFor(owner: Owner, learnerId: string, trainerId: string, coachingMode: 'recorded' | 'live' | undefined) {
+  let listingId: string | undefined;
+  if (coachingMode) {
+    const l = await owner.request('POST', '/marketplace/listings', { agentId: trainerId, title: 'Coaching', domainSlug: DOMAIN, priceCredits: 0, pricingModel: 'free', coachingMode });
+    expect(l.status).toBe(201);
+    expect(l.body.coachingMode).toBe(coachingMode);
+    listingId = l.body.id;
+  }
+  const req = await owner.request('POST', '/training/requests', { learnerAgentId: learnerId, trainerAgentId: trainerId, domainSlug: DOMAIN, objectives: [], ...(listingId ? { listingId } : {}) });
+  expect(req.status).toBe(201);
+  const acc = await owner.request('POST', `/training/requests/${req.body.id}/accept`);
+  const sessionId = acc.body.session.id as string;
+  expect((await owner.request('POST', `/training/sessions/${sessionId}/start`)).status).toBe(200);
+  await drain();
+  const [row] = await database.select().from(schema.trainingSessions).where(eq(schema.trainingSessions.id, sessionId));
+  return row!;
+}
+
+describe('coaching mode: recorded by default, live coaching is opt-in', () => {
+  it('an ONLINE trainer teaches from recorded cases by default (no listing, or a recorded listing)', async () => {
+    const owner = await createUserDirect();
+    const trainer = await onlineSandboxTrainer(owner);
+    for (const mode of [undefined, 'recorded'] as const) {
+      const row = await sessionFor(owner, (await sandboxLearner(owner)).id, trainer.id, mode);
+      expect(row.status).toBe('completed');
+      expect(row.plan).toMatchObject({ mode: 'experience', trainerRecorded: true });
+      expect(row.postScore!).toBeGreaterThan(row.preScore! + 30);
+    }
+  });
+
+  it('a live-coaching listing with an online trainer uses live trainer replies; the measurement is identical', async () => {
+    const owner = await createUserDirect();
+    const trainer = await onlineSandboxTrainer(owner);
+    const row = await sessionFor(owner, (await sandboxLearner(owner)).id, trainer.id, 'live');
+    expect(row.status).toBe('completed');
+    expect((row.plan as { trainerRecorded?: boolean }).trainerRecorded).toBeUndefined();
+    expect(row.plan).toMatchObject({ mode: 'experience' });
+    expect(row.postScore!).toBeGreaterThan(row.preScore! + 30);
+    const reps = await database.select().from(schema.experienceReplays).where(eq(schema.experienceReplays.trainingSessionId, row.id));
+    expect(reps.map((r) => r.purpose).sort()).toEqual(['post_training', 'pre_training']);
+  });
+
+  it('a live-coaching listing falls back to recorded when the trainer is offline', async () => {
+    const owner = await createUserDirect();
+    const trainer = await offlinePromptTrainer(owner, 'Sleeping Live Coach');
+    await qualifyTrainer(trainer, DOMAIN);
+    const row = await sessionFor(owner, (await sandboxLearner(owner)).id, trainer.id, 'live');
+    expect(row.status).toBe('completed');
+    expect(row.plan).toMatchObject({ mode: 'experience', trainerRecorded: true });
+  });
+});

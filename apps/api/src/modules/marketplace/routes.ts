@@ -42,6 +42,7 @@ const ListingBody = z.object({
   pricingModel: z.enum(['per_session', 'free']).default('per_session'),
   settlementMode: z.enum(['on_completion', 'on_improvement']).default('on_completion'),
   minImprovement: z.number().min(0).max(100).nullable().optional(),
+  coachingMode: z.enum(['recorded', 'live']).default('recorded'),
   durationMinutes: z.number().int().min(5).max(24 * 60).default(30),
 });
 const ListingPatch = ListingBody.omit({ agentId: true }).partial().extend({ status: z.enum(['active', 'paused', 'draft']).optional() });
@@ -205,7 +206,7 @@ export default async function routes(app: FastifyInstance) {
         lastAssessedAt: caps.length ? new Date(Math.max(...caps.map((c) => c.assessedAt.getTime()))).toISOString() : null,
         domains: caps.sort((a, b) => b.score - a.score).map((c) => ({ slug: c.slug, name: c.name, score: round1(c.score), accuracy: round1(c.accuracy), confidence: c.confidence, sampleSize: c.sampleSize, verified: c.verified, assessedAt: c.assessedAt })),
       },
-      listings: fullListings.map(({ l, d }) => ({ id: l.id, title: l.title, description: l.description, domainSlug: d.slug, domainName: d.name, skills: l.skills, priceCredits: l.priceCredits, pricingModel: l.pricingModel, settlementMode: l.settlementMode, minImprovement: l.minImprovement, durationMinutes: l.durationMinutes })),
+      listings: fullListings.map(({ l, d }) => ({ id: l.id, title: l.title, description: l.description, domainSlug: d.slug, domainName: d.name, skills: l.skills, priceCredits: l.priceCredits, pricingModel: l.pricingModel, settlementMode: l.settlementMode, minImprovement: l.minImprovement, coachingMode: l.coachingMode, durationMinutes: l.durationMinutes })),
       reviews: reviews.map(({ r, reviewer }) => ({ id: r.id, rating: r.rating, body: r.body, reviewer: { name: reviewer }, createdAt: r.createdAt })),
       availability: { status: agent.status, health: agent.health, acceptsTraining: perms.allowTraining === true && fullListings.length > 0, acceptsLearning: perms.allowLearning === true, lastHealthCheckAt: agent.lastHealthCheckAt },
       reputation: {
@@ -323,7 +324,7 @@ export default async function routes(app: FastifyInstance) {
     const priceCredits = body.pricingModel === 'free' ? 0 : body.priceCredits;
     const [row] = await db().insert(schema.marketplaceListings).values({
       agentId: agent.id, orgId: a.orgId, title: body.title, description: body.description, domainId: domain.id, skills: body.skills,
-      priceCredits, pricingModel: body.pricingModel, settlementMode: body.settlementMode, minImprovement: body.minImprovement ?? null,
+      priceCredits, pricingModel: body.pricingModel, settlementMode: body.settlementMode, minImprovement: body.minImprovement ?? null, coachingMode: body.coachingMode,
       durationMinutes: body.durationMinutes, status: 'active', moderation: 'visible',
     }).returning();
     await audit({ action: 'marketplace.listing.create', targetType: 'marketplace_listing', targetId: row!.id, metadata: { agentId: agent.id, domain: domain.slug, priceCredits } }, req);
@@ -357,6 +358,7 @@ export default async function routes(app: FastifyInstance) {
       ...(body.skills !== undefined && { skills: body.skills }),
       ...(body.settlementMode !== undefined && { settlementMode: body.settlementMode }),
       ...(body.minImprovement !== undefined && { minImprovement: body.minImprovement }),
+      ...(body.coachingMode !== undefined && { coachingMode: body.coachingMode }),
       ...(body.durationMinutes !== undefined && { durationMinutes: body.durationMinutes }),
       ...(body.status !== undefined && { status: body.status }),
       pricingModel, domainId,

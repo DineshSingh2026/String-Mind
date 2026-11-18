@@ -1,0 +1,1 @@
+ALTER TABLE "marketplace_listings" ADD COLUMN "coaching_mode" text DEFAULT 'recorded' NOT NULL;
