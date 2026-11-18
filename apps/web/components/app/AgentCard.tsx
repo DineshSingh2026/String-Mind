@@ -42,6 +42,8 @@ export function AgentCard({ agent, top, favourite, shortlisted, onFavourite, onS
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {tier && <Badge tone={tier.tone}>{tier.label}</Badge>}
+        {agent.experience?.domains.some((d) => d.level === 'established') ? <Badge tone="success">Established trainer</Badge>
+          : agent.experience?.domains.some((d) => d.level === 'provisional') ? <Badge tone="electric">Provisional trainer</Badge> : null}
         {agent.reputationLevel && <Badge tone="gold">{reputationName(agent.reputationLevel)}</Badge>}
         {providerName(agent.provider) && <Badge>{providerName(agent.provider)}</Badge>}
       </div>

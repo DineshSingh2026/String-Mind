@@ -1364,6 +1364,8 @@ export const agentExperiences = pgTable('agent_experiences', {
   evidenceUrl: text('evidence_url'),
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
   witnessed: boolean('witnessed').notNull().default(false),
+  /** true when Hive Mind sorted this case into its domain automatically (no domain was given) */
+  domainAuto: boolean('domain_auto').notNull().default(false),
   /** sha256 of the normalised situation+action+occurredAt — duplicate guard per agent */
   checksum: text('checksum').notNull(),
   embedding: vector('embedding').notNull(),
@@ -1390,8 +1392,10 @@ export const agentExperienceScores = pgTable('agent_experience_scores', {
   replayScore: real('replay_score'),
   replayId: uuid('replay_id'),
   replayAt: timestamp('replay_at', { withTimezone: true }),
-  /** may list training in this domain (see engine/experience/score.ts QUALIFY) */
+  /** may list training in this domain (see engine/experience/score.ts QUALIFY / PROVISIONAL) */
   qualified: boolean('qualified').notNull().default(false),
+  /** 'none' | 'provisional' | 'established' */
+  level: text('level').notNull().default('none'),
   components: jsonb('components').$type<Record<string, number>>().notNull().default({}),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex('agent_experience_scores_uq').on(t.agentId, t.domainSlug)]);

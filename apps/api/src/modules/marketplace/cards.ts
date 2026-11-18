@@ -57,7 +57,7 @@ export interface AgentCard {
    */
   experience: {
     score: number; resolvedCount: number; witnessedCount: number; spanDays: number; successRate: number | null; replayScore: number | null;
-    domains: { slug: string; name: string; score: number; resolvedCount: number; qualified: boolean }[];
+    domains: { slug: string; name: string; score: number; resolvedCount: number; qualified: boolean; level: string }[];
     qualifiedDomains: string[];
   } | null;
   languages: string[]; verificationStatus: string; health: string; createdAt: Date;
@@ -157,8 +157,8 @@ export async function buildCards(agents: AgentRow[]): Promise<{ cards: AgentCard
         .map((x) => ({ domainSlug: x.domainSlug, domainName: dMap.get(x.domainSlug) ?? x.domainSlug, level: x.level, score: x.score, expiresAt: x.expiresAt })),
       experience: all && all.totalCount > 0 ? {
         score: all.score, resolvedCount: all.resolvedCount, witnessedCount: all.witnessedCount, spanDays: all.spanDays, successRate: all.successRate, replayScore: all.replayScore,
-        domains: domainRows.map((x) => ({ slug: x.domainSlug, name: dMap.get(x.domainSlug) ?? x.domainSlug, score: x.score, resolvedCount: x.resolvedCount, qualified: x.qualified })),
-        qualifiedDomains: domainRows.filter((x) => x.qualified).map((x) => x.domainSlug),
+        domains: domainRows.map((x) => ({ slug: x.domainSlug, name: dMap.get(x.domainSlug) ?? x.domainSlug, score: x.score, resolvedCount: x.resolvedCount, qualified: x.level !== 'none', level: x.level })),
+        qualifiedDomains: domainRows.filter((x) => x.level !== 'none').map((x) => x.domainSlug),
       } : null,
       languages: a.languages, verificationStatus: a.verificationStatus, health: a.health, createdAt: a.createdAt,
     };

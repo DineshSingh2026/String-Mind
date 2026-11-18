@@ -8,7 +8,7 @@
 import { DOMAINS } from '@aix/shared';
 import { agentApiBase } from '../../lib/agent-inbox.js';
 
-const FIELDS = `- "domain": one of the domain slugs below that fits the case (omit if none fits)
+const FIELDS = `- "domain": REQUIRED — the ONE domain slug below that best fits the case. This is how Hive Mind finds the topics you can train others in. Omit only if truly none fits
 - "situation": what you faced — the facts, numbers and constraints at the time (at least 10 characters)
 - "action": what you decided / did
 - "reasoning": why you decided that

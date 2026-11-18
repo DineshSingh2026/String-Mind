@@ -20,6 +20,7 @@ import { db, schema } from '../../db/client.js';
 import { sha256 } from '../../lib/crypto.js';
 import { conflict, notFound, unprocessable } from '../../lib/errors.js';
 import { embed } from '../embeddings.js';
+import { classifyAgainstTagged, loadTaggedRefs, type TaggedRef } from './domains.js';
 import { sanitizeContent } from '../training.js';
 
 export type Experience = typeof schema.agentExperiences.$inferSelect;
@@ -124,6 +125,16 @@ export async function addExperiences(agent: { id: string; orgId: string }, items
     rows.push(row);
   });
 
+  // Cases without a domain join one only when they clearly resemble the agent's own tagged cases (stored + this batch).
+  if (rows.some((r) => !r.domainId)) {
+    const refs: TaggedRef[] = [...(await loadTaggedRefs(agent.id)), ...rows.filter((r) => r.domainId).map((r) => ({ domainId: r.domainId!, vec: r.embedding as number[] }))];
+    if (refs.length) for (const r of rows) {
+      if (r.domainId) continue;
+      const d = classifyAgainstTagged(r.embedding as number[], refs);
+      if (d) { r.domainId = d; r.domainAuto = true; }
+    }
+  }
+
   let created: Experience[] = [];
   if (rows.length) {
     for (let i = 0; i < rows.length; i += 100) {
@@ -186,7 +197,7 @@ export function experienceView(e: Experience, byId?: Map<string, string>) {
     id: e.id, agentId: e.agentId, domain: e.domainId ? (byId?.get(e.domainId) ?? null) : 'general',
     situation: e.situation, action: e.action, reasoning: e.reasoning, outcome: e.outcome, lesson: e.lesson, result: e.result,
     occurredAt: e.occurredAt, outcomeRecordedAt: e.outcomeRecordedAt, source: e.source, evidenceUrl: e.evidenceUrl, tags: e.tags,
-    witnessed: e.witnessed, verification: e.witnessed ? 'witnessed' : 'self_reported', createdAt: e.createdAt,
+    witnessed: e.witnessed, verification: e.witnessed ? 'witnessed' : 'self_reported', domainAuto: e.domainAuto, createdAt: e.createdAt,
   };
 }
 

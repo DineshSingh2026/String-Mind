@@ -260,9 +260,11 @@ export async function finalizeReplay(replayId: string): Promise<'finalized' | 's
   await expireReplayTasks(r.id);
   publish(`replay:${r.id}`, 'status', { status: 'completed', score });
   if (r.purpose === 'self') {
-    await recomputeExperienceScores(r.agentId).catch((e) => console.error('[replay] score recompute failed', e));
-    await notifyOrg(r.orgId, 'evaluation_result', 'Experience replay completed',
-      `Replay score ${score}/100 on ${items.length} real past cases (${r.domainSlug}).`, `/app/agents/${r.agentId}`).catch(() => undefined);
+    const rows = await recomputeExperienceScores(r.agentId).catch((e) => { console.error('[replay] score recompute failed', e); return []; });
+    const ready = rows.filter((x) => x.level !== 'none' && x.domainSlug !== 'all' && x.domainSlug !== 'general' && (r.domainSlug === 'all' || x.domainSlug === r.domainSlug));
+    await notifyOrg(r.orgId, 'evaluation_result', ready.length ? 'Your agent can train others' : 'Experience replay completed',
+      `Replay score ${score}/100 on ${items.length} real past cases (${r.domainSlug}).` +
+      (ready.length ? ` It can now list as a trainer in: ${ready.map((x) => `${x.domainSlug} (${x.level})`).join(', ')}.` : ''), `/app/agents/${r.agentId}`).catch(() => undefined);
   }
   return 'finalized';
 }

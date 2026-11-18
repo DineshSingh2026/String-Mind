@@ -38,6 +38,7 @@ export function ExperienceTab({ id, canWrite }: { id: string; canWrite: boolean 
         <p className="text-sm">{p.totals.records} recorded cases · {p.totals.pending} waiting for an outcome</p>
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      <TrainOpportunities id={id} canWrite={canWrite} />
       {canWrite && <MemoryConnectCard id={id} />}
 
       {p.scores.length > 0 && (
@@ -101,6 +102,52 @@ export function ExperienceTab({ id, canWrite }: { id: string; canWrite: boolean 
           </Table>
         ) : <EmptyState title="No experience recorded yet" description="A new agent has no experience, so its Experience Score is 0 whatever its model. Import its past work above, or let the connected agent record decisions via the agent API (see connect.md)." />}
       </div>
+    </div>
+  );
+}
+
+interface Opportunity { domain: string; name: string; level: 'none' | 'provisional' | 'established'; qualified: boolean; score: number; resolvedCount: number; replayScore: number | null; missing: string[]; nextMissing: string[]; listed: boolean }
+
+/** "You can train in…": topics discovered from the agent's real experience, with one-click listing. */
+export function TrainOpportunities({ id, canWrite }: { id: string; canWrite: boolean }) {
+  const { data, mutate } = useApi<{ allowTraining: boolean; untaggedCount: number; items: Opportunity[] }>(`/experience/agents/${id}/opportunities`);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+  if (!data) return null;
+  const act = async (key: string, fn: () => Promise<string>) => {
+    setBusy(key); setMsg(null);
+    try { setMsg({ tone: 'success', text: await fn() }); await mutate(); } catch (e) { setMsg({ tone: 'danger', text: errText(e) }); } finally { setBusy(null); }
+  };
+  const ready = data.items.filter((o) => o.qualified);
+  return (
+    <div className="card p-5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">You can train in</h3>
+        {canWrite && <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => act('discover', async () => {
+          const r = await api.post<{ classified: { tagged: number }; replays: { domain: string }[] }>(`/experience/agents/${id}/discover`, {});
+          return `Sorted ${r.classified.tagged} case(s) into topics; started ${r.replays.length} replay(s). Prompt-connected agents answer from their task inbox. Results appear here when done.`;
+        })}>Discover topics</Button>}
+      </div>
+      {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      {!data.allowTraining && <Alert tone="info">Turn on “Allow training (be a trainer)” in this agent’s Permissions before listing.</Alert>}
+      {data.untaggedCount > 0 && <p className="text-xs text-muted">{data.untaggedCount} case(s) have no topic yet, so they don’t count anywhere. Use “Discover topics”, or tag them from the “List as a trainer” card.</p>}
+      {!data.items.length ? <p className="text-sm text-muted">No topics yet. Connect the agent’s memory or import its history, then click “Discover topics”.</p> : (
+        <Table head={['Topic', 'Level', 'Cases', 'Experience', 'Replay', '']}>
+          {data.items.map((o) => (
+            <tr key={o.domain}>
+              <Td>{o.name}</Td>
+              <Td>{o.level === 'established' ? <Badge tone="success">Established</Badge> : o.level === 'provisional' ? <Badge tone="electric">Provisional</Badge> : <span className="text-xs text-muted">{o.missing[0] ?? '—'}</span>}</Td>
+              <Td>{o.resolvedCount}</Td><Td>{o.score}</Td><Td>{o.replayScore ?? '—'}</Td>
+              <Td>{o.listed ? <Badge tone="success">Listed</Badge> : o.qualified && canWrite
+                ? <Button size="sm" variant="ai" disabled={busy !== null || !data.allowTraining} onClick={() => act(o.domain, async () => {
+                  await api.post(`/experience/agents/${id}/quick-list`, { domain: o.domain });
+                  return `Listed: ${o.name}. Recorded coaching, paid only if the learner measurably improves.`;
+                })}>List now</Button> : null}</Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      {ready.length > 0 && <p className="text-xs text-muted">Listings use recorded coaching (your cases), 30 minutes, paid only if the learner improves. You can edit price and terms later; Provisional trainers are limited to 300 IDLE.</p>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, count, desc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { trainerQualification } from '../../engine/experience/score.js';
+import { provisionalTermsProblem } from '../marketplace/routes.js';
 import { db, schema } from '../../db/client.js';
 import { requirePerm } from '../../lib/auth.js';
 import { audit } from '../../lib/audit.js';
@@ -188,6 +189,10 @@ export default async function routes(app: FastifyInstance) {
       const q = await trainerQualification(trainer.id, domain.slug);
       if (!q.qualified) throw unprocessable(`${trainer.name} does not currently meet the experience requirement to train in ${domain.name}: ${q.missing.join(' ')}`, { reason: 'trainer_not_qualified', missing: q.missing });
       price = l.pricingModel === 'free' ? 0 : l.priceCredits;
+      if (q.level === 'provisional') {
+        const problem = provisionalTermsProblem({ pricingModel: l.pricingModel, priceCredits: price, settlementMode: l.settlementMode, minImprovement: l.minImprovement });
+        if (problem) throw unprocessable(`${trainer.name} is currently a Provisional trainer in ${domain.name}. ${problem}`, { reason: 'provisional_terms', level: q.level });
+      }
     } else if (trainer.orgId !== a.orgId) {
       throw badRequest('listingId is required to train with an agent from another organisation');
     }

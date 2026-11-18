@@ -5,10 +5,10 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../../db/client.js';
-import { enqueue } from '../../jobs/queue.js';
 import { enqueueTask } from '../../lib/agent-inbox.js';
 import { notify } from '../../lib/notify.js';
-import { REPLAY_JOB, REPLAY_MIN_ITEMS, createReplay, gradableCases } from '../../engine/experience/replay.js';
+import { REPLAY_MIN_ITEMS, gradableCases } from '../../engine/experience/replay.js';
+import { discoverExperience } from '../../engine/experience/discover.js';
 import { recomputeExperienceScores } from '../../engine/experience/score.js';
 import { memorySyncPrompt } from './prompts.js';
 
@@ -41,20 +41,13 @@ export async function handleMemorySyncAnswer(task: Task): Promise<void> {
   const rows = await recomputeExperienceScores(agent.id);
   const all = rows.find((r) => r.domainSlug === 'all');
   const cases = await gradableCases(agent.id, 'all');
-  let replayStarted = false;
-  if (cases.length >= REPLAY_MIN_ITEMS) {
-    const busy = await db().select({ id: schema.experienceReplays.id }).from(schema.experienceReplays).where(and(
-      eq(schema.experienceReplays.agentId, agent.id), eq(schema.experienceReplays.purpose, 'self'), inArray(schema.experienceReplays.status, ['queued', 'running']),
-    )).limit(1);
-    if (!busy.length) {
-      const r = await createReplay({ agentId: agent.id, domainSlug: 'all', purpose: 'self' });
-      await enqueue(REPLAY_JOB, { replayId: r.id }, { maxAttempts: 1 });
-      replayStarted = true;
-    }
-  }
+  // Topic discovery: sort untagged cases into domains and replay every domain with enough real cases.
+  const found = await discoverExperience(agent.id).catch((e) => { console.error('[memory-sync] discovery failed', e); return null; });
+  const replayStarted = (found?.replays.length ?? 0) > 0;
+  const domainsReplayed = found?.replays.filter((r) => r.domain !== 'all').map((r) => r.domain) ?? [];
   const summary = (task.response ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
   await notify(agent.ownerId, 'system', `${agent.name} connected its memory`,
     `${all?.totalCount ?? 0} experience record(s) on Hive Mind (${all?.resolvedCount ?? 0} with a known outcome). ` +
-    (replayStarted ? 'An experience replay has started on its real past cases. ' : cases.length ? `Needs ${REPLAY_MIN_ITEMS}+ cases with a known outcome for a replay. ` : 'No real history was sent — its Experience Score stays 0 until it records real work. ') +
+    (replayStarted ? `Experience replays have started on its real past cases${domainsReplayed.length ? ` (${domainsReplayed.join(', ')})` : ''}; you will be told which topics it can train in. ` : cases.length ? `Needs ${REPLAY_MIN_ITEMS}+ cases with a known outcome for a replay. ` : 'No real history was sent — its Experience Score stays 0 until it records real work. ') +
     (summary ? `Agent's report: "${summary}"` : ''), `/app/agents/${agent.id}`).catch(() => undefined);
 }

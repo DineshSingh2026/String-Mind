@@ -14,7 +14,7 @@ import { PageQuery, offset, parse } from '../../lib/http.js';
 import { notifyOrg } from '../../lib/notify.js';
 import { getOwnedAgent } from '../../lib/tenancy.js';
 import { recomputeReputation } from '../reputation/service.js';
-import { QUALIFY, trainerQualification } from '../../engine/experience/score.js';
+import { PROVISIONAL, QUALIFY, trainerQualification, type TrainerLevel } from '../../engine/experience/score.js';
 import { buildCards, isPubliclyVisible, publicAgentWhere, round1, selectPublicAgents, verifiedScore, type AgentCard, type AgentRow } from './cards.js';
 
 export const MIN_LISTING_SCORE = 70;
@@ -32,7 +32,7 @@ const SearchQuery = PageQuery.extend({
   sort: z.enum(['popular', 'experience', 'score', 'price_asc', 'price_desc', 'rating', 'newest']).default('popular'),
 });
 
-const ListingBody = z.object({
+export const ListingBody = z.object({
   agentId: z.string().uuid(),
   title: z.string().trim().min(3).max(140),
   description: z.string().max(5000).default(''),
@@ -63,7 +63,15 @@ async function domainBySlug(slug: string) {
  * benchmark score or an exam certification — does not qualify, because what the learner pays for is the trainer's
  * past experience, not its model.
  */
-async function assertCanList(agent: AgentRow, _domainId: string, domainSlug: string) {
+/** Provisional trainers: capped price and pay-on-improvement only (a weak trainer cannot be paid for no improvement). */
+export function provisionalTermsProblem(t: { pricingModel: string; priceCredits: number; settlementMode: string; minImprovement: number | null }): string | null {
+  if (t.pricingModel === 'free' || t.priceCredits <= 0) return null;
+  if (t.priceCredits > PROVISIONAL.maxPriceCredits) return `Provisional trainers can charge at most ${PROVISIONAL.maxPriceCredits} IDLE per session until they reach Established (${QUALIFY.minResolved}+ cases, replay ≥ ${QUALIFY.minReplayScore}).`;
+  if (t.settlementMode !== 'on_improvement' || (t.minImprovement ?? 0) < 1) return 'Provisional trainers are paid only if the learner measurably improves: choose "Only if the learner measurably improves" with a minimum improvement of at least 1 point.';
+  return null;
+}
+
+async function assertCanList(agent: AgentRow, _domainId: string, domainSlug: string): Promise<TrainerLevel> {
   if (agent.status === 'suspended') throw unprocessable('This agent is suspended and cannot publish listings.');
   if ((agent.permissions as { allowTraining?: boolean }).allowTraining !== true) {
     throw unprocessable('Training is not enabled for this agent. Turn on "Allow training (be a trainer)" in the agent permissions first.', { reason: 'allow_training_disabled' });
@@ -72,9 +80,26 @@ async function assertCanList(agent: AgentRow, _domainId: string, domainSlug: str
   if (!q.qualified) {
     throw unprocessable(
       `To offer training in "${domainSlug}" an agent needs real, recorded experience in it — a strong model alone does not qualify. Missing: ${q.missing.join(' ')}`,
-      { reason: 'experience_required', missing: q.missing, experienceScore: q.score, requirements: QUALIFY },
+      { reason: 'experience_required', missing: q.missing, experienceScore: q.score, requirements: QUALIFY, provisional: PROVISIONAL },
     );
   }
+  return q.level;
+}
+
+/** Create a listing for an agent that passed assertCanList; the shared path for POST /listings and one-click listing. */
+export async function createTrainerListing(orgId: string, agent: AgentRow, domain: { id: string; slug: string }, body: z.infer<typeof ListingBody>, req: FastifyRequest) {
+  const level = await assertCanList(agent, domain.id, domain.slug);
+  if (body.settlementMode === 'on_improvement' && body.minImprovement == null) throw unprocessable('minImprovement is required when settlementMode is on_improvement');
+  const priceCredits = body.pricingModel === 'free' ? 0 : body.priceCredits;
+  const problem = level === 'provisional' ? provisionalTermsProblem({ pricingModel: body.pricingModel, priceCredits, settlementMode: body.settlementMode, minImprovement: body.minImprovement ?? null }) : null;
+  if (problem) throw unprocessable(problem, { reason: 'provisional_terms', level, maxPriceCredits: PROVISIONAL.maxPriceCredits });
+  const [row] = await db().insert(schema.marketplaceListings).values({
+    agentId: agent.id, orgId, title: body.title, description: body.description, domainId: domain.id, skills: body.skills,
+    priceCredits, pricingModel: body.pricingModel, settlementMode: body.settlementMode, minImprovement: body.minImprovement ?? null, coachingMode: body.coachingMode,
+    durationMinutes: body.durationMinutes, status: 'active', moderation: 'visible',
+  }).returning();
+  await audit({ action: 'marketplace.listing.create', targetType: 'marketplace_listing', targetId: row!.id, metadata: { agentId: agent.id, domain: domain.slug, priceCredits, trainerLevel: level } }, req);
+  return { ...row!, domainSlug: domain.slug, trainerLevel: level };
 }
 
 /** Agent addressable by slug or id that the caller may view: public, or owned by the caller's org. */
@@ -319,16 +344,7 @@ export default async function routes(app: FastifyInstance) {
     const agent = await getOwnedAgent(body.agentId, a.orgId);
     const domain = await domainBySlug(body.domainSlug);
     if (!domain) throw unprocessable(`Unknown domain "${body.domainSlug}"`);
-    await assertCanList(agent, domain.id, domain.slug);
-    if (body.settlementMode === 'on_improvement' && body.minImprovement == null) throw unprocessable('minImprovement is required when settlementMode is on_improvement');
-    const priceCredits = body.pricingModel === 'free' ? 0 : body.priceCredits;
-    const [row] = await db().insert(schema.marketplaceListings).values({
-      agentId: agent.id, orgId: a.orgId, title: body.title, description: body.description, domainId: domain.id, skills: body.skills,
-      priceCredits, pricingModel: body.pricingModel, settlementMode: body.settlementMode, minImprovement: body.minImprovement ?? null, coachingMode: body.coachingMode,
-      durationMinutes: body.durationMinutes, status: 'active', moderation: 'visible',
-    }).returning();
-    await audit({ action: 'marketplace.listing.create', targetType: 'marketplace_listing', targetId: row!.id, metadata: { agentId: agent.id, domain: domain.slug, priceCredits } }, req);
-    return reply.status(201).send({ ...row, domainSlug: domain.slug });
+    return reply.status(201).send(await createTrainerListing(a.orgId, agent, domain, body, req));
   });
 
   app.patch('/listings/:id', async (req) => {
@@ -349,7 +365,15 @@ export default async function routes(app: FastifyInstance) {
     if (becomesActive) {
       if (l.moderation === 'hidden') throw forbidden('This listing was hidden by moderation and cannot be re-activated.');
       if (!domainSlug) domainSlug = (await db().select().from(schema.capabilityDomains).where(eq(schema.capabilityDomains.id, domainId)).limit(1))[0]?.slug ?? '';
-      await assertCanList(agent, domainId, domainSlug);
+      const level = await assertCanList(agent, domainId, domainSlug);
+      if (level === 'provisional') {
+        const pm = body.pricingModel ?? l.pricingModel;
+        const problem = provisionalTermsProblem({
+          pricingModel: pm, priceCredits: pm === 'free' ? 0 : (body.priceCredits ?? l.priceCredits),
+          settlementMode: body.settlementMode ?? l.settlementMode, minImprovement: body.minImprovement !== undefined ? body.minImprovement : l.minImprovement,
+        });
+        if (problem) throw unprocessable(problem, { reason: 'provisional_terms', level, maxPriceCredits: PROVISIONAL.maxPriceCredits });
+      }
     }
     const pricingModel = body.pricingModel ?? l.pricingModel;
     const [row] = await db().update(schema.marketplaceListings).set({

@@ -8,7 +8,7 @@
  *                  still pending after STALE_PENDING_DAYS count as misses (no reporting only the wins)
  *   Replay     30  can it actually USE that experience: latest self replay score (real past cases, answer hidden)
  *
- * Trainer qualification (may publish a training listing in a domain): see QUALIFY.
+ * Trainer qualification (may publish a training listing in a domain): see QUALIFY (established) and PROVISIONAL.
  * Rows are derived and always recomputable from agent_experiences + experience_replays.
  */
 import { and, desc, eq } from 'drizzle-orm';
@@ -16,7 +16,14 @@ import { db, schema } from '../../db/client.js';
 
 export const STALE_PENDING_DAYS = 90;
 export const REPLAY_VALID_DAYS = 180;
+/** Established trainer: a full track record in the domain. */
 export const QUALIFY = { minResolved: 20, minReplayItems: 5, minReplayScore: 60, minScore: 50 } as const;
+/**
+ * Provisional trainer: real but shorter history. May list at a capped price and only on "pay if the learner measurably
+ * improves" terms (the learner is refunded otherwise), so a weak trainer cannot be paid for no improvement.
+ */
+export const PROVISIONAL = { minResolved: 10, minReplayItems: 5, minReplayScore: 50, minScore: 25, maxPriceCredits: 300 } as const;
+export type TrainerLevel = 'none' | 'provisional' | 'established';
 export const WEIGHTS = { depth: 30, span: 20, track: 20, replay: 30 } as const;
 const DEPTH_FULL_AT = 200;
 const SPAN_FULL_MONTHS = 24;
@@ -77,18 +84,47 @@ export function computeExperienceScore(input: ScoreInput) {
   };
 }
 
-export function qualificationFor(slug: string, s: { score: number; resolvedCount: number; replayValid: boolean; replayScore: number | null }) {
+type Tier = { minResolved: number; minReplayScore: number; minScore: number };
+
+function tierMissing(t: Tier, s: { score: number; resolvedCount: number; replayValid: boolean; replayScore: number | null }): string[] {
   const missing: string[] = [];
-  if (slug === 'all' || slug === 'general') missing.push('Experience must be tagged with a capability domain to train others in it.');
-  if (s.resolvedCount < QUALIFY.minResolved) missing.push(`At least ${QUALIFY.minResolved} experiences with a known outcome (has ${s.resolvedCount}).`);
+  if (s.resolvedCount < t.minResolved) missing.push(`At least ${t.minResolved} experiences with a known outcome (has ${s.resolvedCount}).`);
   if (!s.replayValid) missing.push(`A completed experience replay (≥ ${QUALIFY.minReplayItems} cases, within ${REPLAY_VALID_DAYS} days).`);
-  else if ((s.replayScore ?? 0) < QUALIFY.minReplayScore) missing.push(`Replay score of at least ${QUALIFY.minReplayScore} (latest ${r1(s.replayScore ?? 0)}).`);
-  if (s.score < QUALIFY.minScore) missing.push(`Experience Score of at least ${QUALIFY.minScore} (currently ${r1(s.score)}).`);
-  return { qualified: missing.length === 0, missing };
+  else if ((s.replayScore ?? 0) < t.minReplayScore) missing.push(`Replay score of at least ${t.minReplayScore} (latest ${r1(s.replayScore ?? 0)}).`);
+  if (s.score < t.minScore) missing.push(`Experience Score of at least ${t.minScore} (currently ${r1(s.score)}).`);
+  return missing;
 }
 
-/** Recompute and persist every Experience Score row of an agent ('all' + each domain + 'general'). */
-export async function recomputeExperienceScores(agentId: string): Promise<ExperienceScoreRow[]> {
+/**
+ * Trainer level in one domain. `missing` = what is still needed to qualify at all (empty once qualified);
+ * `nextMissing` = what is still needed for Established (empty once established).
+ */
+export function qualificationFor(slug: string, s: { score: number; resolvedCount: number; replayValid: boolean; replayScore: number | null }) {
+  if (slug === 'all' || slug === 'general') {
+    return { level: 'none' as TrainerLevel, qualified: false, missing: ['Experience must be tagged with a capability domain to train others in it.'], nextMissing: [] as string[] };
+  }
+  const prov = tierMissing(PROVISIONAL, s);
+  const est = tierMissing(QUALIFY, s);
+  const level: TrainerLevel = est.length === 0 ? 'established' : prov.length === 0 ? 'provisional' : 'none';
+  return { level, qualified: level !== 'none', missing: level === 'none' ? prov : [], nextMissing: level === 'established' ? [] : est };
+}
+
+const recomputeChains = new Map<string, Promise<unknown>>();
+
+/**
+ * Recompute and persist every Experience Score row of an agent ('all' + each domain + 'general').
+ * Runs one at a time per agent: several replays can finish at nearly the same moment, and a slower recompute that
+ * started earlier must not overwrite a newer one with stale data.
+ */
+export function recomputeExperienceScores(agentId: string): Promise<ExperienceScoreRow[]> {
+  const prev = recomputeChains.get(agentId) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(() => computeAndStoreScores(agentId));
+  recomputeChains.set(agentId, next);
+  void next.catch(() => undefined).then(() => { if (recomputeChains.get(agentId) === next) recomputeChains.delete(agentId); });
+  return next;
+}
+
+async function computeAndStoreScores(agentId: string): Promise<ExperienceScoreRow[]> {
   const domains = await db().select({ id: schema.capabilityDomains.id, slug: schema.capabilityDomains.slug }).from(schema.capabilityDomains);
   const slugOf = new Map(domains.map((d) => [d.id, d.slug]));
   const recs = await db().select({
@@ -105,9 +141,31 @@ export async function recomputeExperienceScores(agentId: string): Promise<Experi
     const slug = r.domainId ? (slugOf.get(r.domainId) ?? 'general') : 'general';
     groups.set(slug, [...(groups.get(slug) ?? []), r]);
   }
-  const latestFor = (slug: string) => {
+  // An all-domain replay also counts for each domain it covered: its graded cases of that domain give a domain replay score.
+  type Rep = { id: string; score: number; itemsGraded: number; completedAt: Date };
+  const derived = new Map<string, Rep>();
+  const allReplay = replays.find((x) => x.domainSlug === 'all' && x.score != null && x.completedAt);
+  if (allReplay) {
+    const its = await db().select({ score: schema.experienceReplayItems.score, domainId: schema.agentExperiences.domainId }).from(schema.experienceReplayItems)
+      .innerJoin(schema.agentExperiences, eq(schema.agentExperiences.id, schema.experienceReplayItems.experienceId))
+      .where(and(eq(schema.experienceReplayItems.replayId, allReplay.id), eq(schema.experienceReplayItems.status, 'graded')));
+    const acc = new Map<string, { sum: number; n: number }>();
+    for (const it of its) {
+      const slug = it.domainId ? slugOf.get(it.domainId) : null;
+      if (!slug || it.score == null) continue;
+      const a = acc.get(slug) ?? { sum: 0, n: 0 };
+      a.sum += it.score; a.n++; acc.set(slug, a);
+    }
+    // only a replay that covered enough of the domain's cases counts for it (fewer would not be a fair test)
+    for (const [slug, a] of acc) if (a.n >= QUALIFY.minReplayItems) derived.set(slug, { id: allReplay.id, score: Math.round((a.sum / a.n) * 1000) / 10, itemsGraded: a.n, completedAt: allReplay.completedAt! });
+  }
+  const latestFor = (slug: string): Rep | null => {
     const r = replays.find((x) => x.domainSlug === slug && x.score != null && x.completedAt) ?? (slug === 'all' ? replays.find((x) => x.score != null && x.completedAt) : undefined);
-    return r ? { id: r.id, score: r.score!, itemsGraded: r.itemsGraded, completedAt: r.completedAt! } : null;
+    const own: Rep | null = r ? { id: r.id, score: r.score!, itemsGraded: r.itemsGraded, completedAt: r.completedAt! } : null;
+    const d = derived.get(slug) ?? null;
+    const valid = (x: Rep | null) => (x && x.itemsGraded >= QUALIFY.minReplayItems ? x : null);
+    const o = valid(own), dd = valid(d);
+    return o && dd ? (dd.completedAt > o.completedAt ? dd : o) : (o ?? dd ?? own);
   };
 
   const out: ExperienceScoreRow[] = [];
@@ -120,7 +178,7 @@ export async function recomputeExperienceScores(agentId: string): Promise<Experi
       agentId, domainSlug: slug, score: s.score, totalCount: s.totalCount, resolvedCount: s.resolvedCount, witnessedCount: s.witnessedCount,
       successRate: s.successRate, spanDays: s.spanDays, firstAt: s.firstAt, lastAt: s.lastAt,
       replayScore: s.replayValid ? s.replayScore : null, replayId: s.replayValid ? replay!.id : null, replayAt: s.replayValid ? replay!.completedAt : null,
-      qualified: q.qualified, components: s.components, updatedAt: now,
+      qualified: q.qualified, level: q.level, components: s.components, updatedAt: now,
     };
     const [row] = await db().insert(schema.agentExperienceScores).values(values)
       .onConflictDoUpdate({ target: [schema.agentExperienceScores.agentId, schema.agentExperienceScores.domainSlug], set: values }).returning();
@@ -143,7 +201,7 @@ export function scoreView(r: ExperienceScoreRow) {
     domain: r.domainSlug, score: r.score, totalCount: r.totalCount, resolvedCount: r.resolvedCount, witnessedCount: r.witnessedCount,
     successRate: r.successRate, spanDays: r.spanDays, firstAt: r.firstAt, lastAt: r.lastAt,
     replayScore: r.replayScore, replayId: r.replayId, replayAt: r.replayAt, components: r.components,
-    qualifiedToTrain: r.qualified, missing: q.missing, updatedAt: r.updatedAt,
+    qualifiedToTrain: q.qualified, level: q.level, missing: q.missing, nextMissing: q.nextMissing, updatedAt: r.updatedAt,
   };
 }
 
@@ -152,8 +210,8 @@ export async function trainerQualification(agentId: string, domainSlug: string) 
   const rows = await recomputeExperienceScores(agentId);
   const row = rows.find((r) => r.domainSlug === domainSlug);
   if (!row) {
-    return { qualified: false, score: 0, missing: [`No experience recorded in "${domainSlug}" yet. Record or import this agent's real past work in this domain, then run an experience replay.`] };
+    return { qualified: false, level: 'none' as TrainerLevel, score: 0, nextMissing: [] as string[], missing: [`No experience recorded in "${domainSlug}" yet. Record or import this agent's real past work in this domain, then run an experience replay.`] };
   }
   const v = scoreView(row);
-  return { qualified: row.qualified, score: row.score, missing: v.missing, row: v };
+  return { qualified: v.qualifiedToTrain, level: v.level, score: row.score, missing: v.missing, nextMissing: v.nextMissing, row: v };
 }

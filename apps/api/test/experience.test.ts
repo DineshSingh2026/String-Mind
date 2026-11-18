@@ -333,7 +333,7 @@ describe('prompt-connected agent: the connection is a mind connection', () => {
     expect(first.body.tasks[0].messages[0].content).toMatch(/NEVER invent/);
     await agentReq(token, 'POST', '/agent-api/tasks/results', { results: [{ id: first.body.tasks[0].id, text: 'Sent 16 entries: 16 created, 0 rejected.' }] });
     const auto = await database.select().from(schema.experienceReplays).where(eq(schema.experienceReplays.agentId, created.body.id));
-    expect(auto).toHaveLength(1); // a self replay started automatically on its real cases
+    expect(auto.map((r) => r.domainSlug).sort()).toEqual(['all', DOMAIN]); // topic discovery: a replay per domain + one overall
 
     const mind = await agentReq(token, 'GET', `/agent-api/mind?q=${encodeURIComponent('memory grows every hour until OOM killed')}`);
     expect(mind.status).toBe(200);
@@ -358,29 +358,5 @@ describe('prompt-connected agent: the connection is a mind connection', () => {
     r = await owner.request('GET', `/experience/replays/${rep.body.id}`);
     expect(r.body.status).toBe('completed');
     expect(r.body.score).toBeGreaterThan(50);
-  });
-});
-
-describe('trainer readiness checklist', () => {
-  it('shows exactly what is missing, counts untagged cases, and tagging them moves the agent toward qualifying', async () => {
-    const owner = await createUserDirect();
-    const agent = await makeAgent(owner, 'Readiness Bot', { allowTraining: true });
-    const hist = HISTORY_TEMPLATES.flatMap((t) => Array.from({ length: 5 }, (_, i) => ({ situation: t.situation(i + 30), action: t.action, reasoning: t.reasoning, outcome: t.outcome, lesson: t.lesson, result: t.result, occurredAt: new Date(Date.now() - (i + 1) * 20 * 86_400_000).toISOString() })));
-    expect((await owner.request('POST', `/experience/agents/${agent.id}/import`, { content: JSON.stringify(hist) })).body.created).toBe(25);
-
-    const before = await owner.request('GET', `/experience/agents/${agent.id}/readiness?domain=${DOMAIN}`);
-    expect(before.status).toBe(200);
-    expect(before.body).toMatchObject({ qualified: false, untaggedCount: 25 });
-    expect(before.body.checks.find((c: { key: string }) => c.key === 'cases')).toMatchObject({ ok: false, current: 0, required: 20 });
-
-    const tagged = await owner.request('POST', `/experience/agents/${agent.id}/records/tag-domain`, { domain: DOMAIN });
-    expect(tagged.body).toMatchObject({ tagged: 25, domain: DOMAIN });
-    const after = await owner.request('GET', `/experience/agents/${agent.id}/readiness?domain=${DOMAIN}`);
-    expect(after.body.untaggedCount).toBe(0);
-    expect(after.body.checks.find((c: { key: string }) => c.key === 'cases')).toMatchObject({ ok: true, current: 25 });
-    expect(after.body.checks.find((c: { key: string }) => c.key === 'replay').ok).toBe(false); // still needs a replay
-    expect(after.body.qualified).toBe(false);
-
-    expect((await (await createUserDirect()).request('GET', `/experience/agents/${agent.id}/readiness?domain=${DOMAIN}`)).status).toBe(404);
   });
 });

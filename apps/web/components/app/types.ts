@@ -60,6 +60,7 @@ export interface MarketAgent {
   provider?: { slug: string; name: string } | string | null; modelName?: string;
   owner?: { name: string } | null; verifiedDomains: { slug: string; name: string; score: number | null }[];
   overallScore: number | null; rating: number | null; ratingCount: number; sessionsCompleted: number;
+  experience?: { score: number; resolvedCount: number; domains: { slug: string; name: string; level: string }[] } | null;
   reputationLevel?: string | null; listings: Listing[]; languages?: string[]; verificationStatus?: string | null; health?: string | null;
 }
 export interface Listing {

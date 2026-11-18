@@ -17,11 +17,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, desc, eq, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { DOMAINS } from '@aix/shared';
 import { db, schema } from '../../db/client.js';
 import { enqueue, registerJob } from '../../jobs/queue.js';
 import { audit } from '../../lib/audit.js';
 import { requirePerm } from '../../lib/auth.js';
-import { notFound } from '../../lib/errors.js';
+import { conflict, notFound } from '../../lib/errors.js';
 import { onTaskAnswered } from '../../lib/agent-inbox.js';
 import { parse } from '../../lib/http.js';
 import { getOwnedAgent } from '../../lib/tenancy.js';
@@ -31,8 +32,10 @@ import {
   REPLAY_JOB, REPLAY_MAX_ITEMS, REPLAY_MIN_ITEMS, REPLAY_SWEEP_JOB, cancelReplay, createReplay, ensureReplaySweepScheduled, handleReplayTaskAnswer,
   replayView, runReplay, sweepReplays,
 } from '../../engine/experience/replay.js';
-import { QUALIFY, REPLAY_VALID_DAYS, STALE_PENDING_DAYS, WEIGHTS, getExperienceScores, recomputeExperienceScores, scoreView, trainerQualification } from '../../engine/experience/score.js';
+import { PROVISIONAL, QUALIFY, REPLAY_VALID_DAYS, STALE_PENDING_DAYS, WEIGHTS, getExperienceScores, recomputeExperienceScores, scoreView, trainerQualification } from '../../engine/experience/score.js';
 import { publicAgentWhere } from '../marketplace/cards.js';
+import { ListingBody, createTrainerListing } from '../marketplace/routes.js';
+import { discoverExperience } from '../../engine/experience/discover.js';
 import { TEMPLATE_CSV, memoryExportPrompt, memorySyncPrompt } from './prompts.js';
 import { handleMemorySyncAnswer } from './sync.js';
 import { PROMPT_METHOD, promptConfig } from '../../lib/agent-inbox.js';
@@ -54,6 +57,7 @@ const ReplayBody = z.object({ domain: z.string().max(64).default('all') });
 export const EXPERIENCE_RULES = {
   weights: WEIGHTS,
   qualify: QUALIFY,
+  provisional: PROVISIONAL,
   replay: { minCases: REPLAY_MIN_ITEMS, maxCases: REPLAY_MAX_ITEMS, validDays: REPLAY_VALID_DAYS },
   stalePendingDays: STALE_PENDING_DAYS,
   explanation: [
@@ -62,6 +66,7 @@ export const EXPERIENCE_RULES = {
     'Span: how long the agent has been doing this work (full at 24 months).',
     'Track record: how often its decisions worked (conservative lower bound). Decisions logged on Hive Mind but never resolved count as misses after 90 days.',
     'Replay: real past cases are replayed with the outcome hidden; the agent must decide again using the rest of its experience.',
+    `Trainer levels: Provisional (${PROVISIONAL.minResolved}+ cases, replay ≥ ${PROVISIONAL.minReplayScore}) may list at up to ${PROVISIONAL.maxPriceCredits} IDLE, paid only if the learner measurably improves. Established (${QUALIFY.minResolved}+ cases, replay ≥ ${QUALIFY.minReplayScore}) has no such limits.`,
   ],
 };
 
@@ -145,13 +150,17 @@ export default async function routes(app: FastifyInstance) {
     const [untagged] = await db().select({ n: sql<number>`count(*)::int` }).from(schema.agentExperiences)
       .where(and(eq(schema.agentExperiences.agentId, agentId), sql`${schema.agentExperiences.domainId} is null`));
     const resolved = row?.resolvedCount ?? 0;
-    const replayOk = row?.replayScore != null && row.replayScore >= QUALIFY.minReplayScore;
+    const replay = row?.replayScore ?? null;
+    const score = row?.score ?? 0;
+    const tier = (key: string, label: string, current: number | null, p: number, e: number) =>
+      ({ key, label, current, provisional: p, established: e, okProvisional: current != null && current >= p, okEstablished: current != null && current >= e });
     return {
-      domain, known: !!dom, qualified: q.qualified, missing: q.missing, untaggedCount: Number(untagged?.n ?? 0),
+      domain, known: !!dom, qualified: q.qualified, level: q.level, missing: q.missing, nextMissing: q.nextMissing, untaggedCount: Number(untagged?.n ?? 0),
+      terms: q.level === 'provisional' ? { maxPriceCredits: PROVISIONAL.maxPriceCredits, settlement: 'on_improvement' } : null,
       checks: [
-        { key: 'cases', label: 'Real cases with a known outcome in this domain', ok: resolved >= QUALIFY.minResolved, current: resolved, required: QUALIFY.minResolved },
-        { key: 'replay', label: 'Experience replay passed', ok: replayOk, current: row?.replayScore ?? null, required: QUALIFY.minReplayScore },
-        { key: 'score', label: 'Experience Score', ok: (row?.score ?? 0) >= QUALIFY.minScore, current: row?.score ?? 0, required: QUALIFY.minScore },
+        tier('cases', 'Real cases with a known outcome in this domain', resolved, PROVISIONAL.minResolved, QUALIFY.minResolved),
+        tier('replay', 'Experience replay score', replay, PROVISIONAL.minReplayScore, QUALIFY.minReplayScore),
+        tier('score', 'Experience Score', score, PROVISIONAL.minScore, QUALIFY.minScore),
       ],
     };
   });
@@ -169,6 +178,57 @@ export default async function routes(app: FastifyInstance) {
     await recomputeExperienceScores(agentId);
     await audit({ action: 'experience.tag_domain', targetType: 'agent', targetId: agentId, metadata: { domain, count: out.length } }, req);
     return { tagged: out.length, domain };
+  });
+
+  /** Run topic discovery now: auto-sort untagged cases, replay every domain with enough real cases. */
+  app.post('/agents/:agentId/discover', async (req, reply) => {
+    const a = requirePerm(req, 'assessments.run');
+    const { agentId } = parse(AgentParam, req.params);
+    await getOwnedAgent(agentId, a.orgId);
+    const r = await discoverExperience(agentId, { requestedBy: a.user.id });
+    await recomputeExperienceScores(agentId);
+    await audit({ action: 'experience.discover', targetType: 'agent', targetId: agentId, metadata: { tagged: r.classified.tagged, replays: r.replays.length } }, req);
+    return reply.status(202).send(r);
+  });
+
+  /** "You can train in…": every domain with experience, its trainer level, and what is still needed. */
+  app.get('/agents/:agentId/opportunities', async (req) => {
+    const a = requirePerm(req, 'agents.read');
+    const { agentId } = parse(AgentParam, req.params);
+    const agent = await getOwnedAgent(agentId, a.orgId);
+    const rows = await recomputeExperienceScores(agentId); // always fresh: levels depend on replays that finish at any time
+    const listed = await db().select({ slug: schema.capabilityDomains.slug }).from(schema.marketplaceListings)
+      .innerJoin(schema.capabilityDomains, eq(schema.capabilityDomains.id, schema.marketplaceListings.domainId))
+      .where(and(eq(schema.marketplaceListings.agentId, agentId), eq(schema.marketplaceListings.status, 'active')));
+    const listedSet = new Set(listed.map((l) => l.slug));
+    const [untagged] = await db().select({ n: sql<number>`count(*)::int` }).from(schema.agentExperiences)
+      .where(and(eq(schema.agentExperiences.agentId, agentId), sql`${schema.agentExperiences.domainId} is null`));
+    const name = (slug: string) => DOMAINS.find((d) => d.slug === slug)?.name ?? slug;
+    const items = rows.filter((r) => r.domainSlug !== 'all' && r.domainSlug !== 'general').map(scoreView)
+      .map((v) => ({ domain: v.domain, name: name(v.domain), level: v.level, qualified: v.qualifiedToTrain, score: v.score, resolvedCount: v.resolvedCount, replayScore: v.replayScore, missing: v.missing, nextMissing: v.nextMissing, listed: listedSet.has(v.domain) }))
+      .sort((x, y) => Number(y.qualified) - Number(x.qualified) || y.score - x.score);
+    return { allowTraining: (agent.permissions as { allowTraining?: boolean }).allowTraining === true, untaggedCount: Number(untagged?.n ?? 0), items };
+  });
+
+  /** One-click listing for a domain the agent qualifies in (sensible defaults; terms obey the trainer level). */
+  app.post('/agents/:agentId/quick-list', async (req, reply) => {
+    const a = requirePerm(req, 'marketplace.publish');
+    const { agentId } = parse(AgentParam, req.params);
+    const agent = await getOwnedAgent(agentId, a.orgId);
+    const { domain, priceCredits } = parse(z.object({ domain: z.string().min(1).max(64), priceCredits: z.number().int().min(0).max(1_000_000).optional() }), req.body);
+    const [dom] = await db().select().from(schema.capabilityDomains).where(eq(schema.capabilityDomains.slug, domain)).limit(1);
+    if (!dom) throw notFound('Domain');
+    const [dupe] = await db().select({ id: schema.marketplaceListings.id }).from(schema.marketplaceListings)
+      .where(and(eq(schema.marketplaceListings.agentId, agentId), eq(schema.marketplaceListings.domainId, dom.id), eq(schema.marketplaceListings.status, 'active'))).limit(1);
+    if (dupe) throw conflict(`This agent already has an active listing in ${dom.name}.`);
+    const q = await trainerQualification(agentId, domain);
+    const price = priceCredits ?? (q.level === 'provisional' ? 150 : 400);
+    const body = ListingBody.parse({
+      agentId, domainSlug: domain, title: `${agent.name} — ${dom.name} coaching from real experience`,
+      description: `Learn ${dom.name.toLowerCase()} from ${agent.name}'s own recorded real cases: what it faced, what it decided, what happened and the lessons. You are measured on held-back real cases before and after, and pay only if you measurably improve.`,
+      priceCredits: price, pricingModel: 'per_session', settlementMode: 'on_improvement', minImprovement: 5, coachingMode: 'recorded', durationMinutes: 30,
+    });
+    return reply.status(201).send(await createTrainerListing(a.orgId, agent, dom, body, req));
   });
 
   /** Prompts that connect the agent's own memory to its Experience Ledger (sync via API, or export a file). */

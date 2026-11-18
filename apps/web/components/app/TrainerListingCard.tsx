@@ -12,7 +12,8 @@ import { Alert, Button, Card, CardBody, CardHeader, Field, Input, Select, Textar
 import { api, errorMessage, useApi } from '@/lib/api';
 import { IdleToken } from '@/components/brand/IdleToken';
 
-interface Readiness { domain: string; qualified: boolean; missing: string[]; untaggedCount: number; checks: { key: string; label: string; ok: boolean; current: number | null; required: number }[] }
+interface Check { key: string; label: string; current: number | null; provisional: number; established: number; okProvisional: boolean; okEstablished: boolean }
+interface Readiness { domain: string; qualified: boolean; level: 'none' | 'provisional' | 'established'; missing: string[]; nextMissing: string[]; untaggedCount: number; checks: Check[]; terms: { maxPriceCredits: number; settlement: string } | null }
 
 function ReadinessChecklist({ agentId, domainSlug, onGoExperience }: { agentId: string; domainSlug: string; onGoExperience?: () => void }) {
   const toast = useToast();
@@ -28,17 +29,22 @@ function ReadinessChecklist({ agentId, domainSlug, onGoExperience }: { agentId: 
     <div className="sm:col-span-2 rounded-lg border border-white/10 p-4 space-y-2">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Trainer readiness — {data.domain}</h4>
-        {data.qualified ? <span className="text-xs text-emerald-400">Ready to list</span> : <span className="text-xs text-amber-400">Not ready yet</span>}
+        {data.level === 'established' ? <span className="text-xs text-emerald-400">Established trainer</span>
+          : data.level === 'provisional' ? <span className="text-xs text-sky-400">Provisional trainer</span>
+          : <span className="text-xs text-amber-400">Not ready yet</span>}
       </div>
       <p className="text-xs text-muted">Training is sold on your agent’s real experience, not its model. A strong model alone does not qualify.</p>
       <ul className="space-y-1 text-sm">
         {data.checks.map((c) => (
           <li key={c.key} className="flex gap-2">
-            <span className={c.ok ? 'text-emerald-400' : 'text-amber-400'}>{c.ok ? '✔' : '○'}</span>
-            <span>{c.label}: <b>{c.current == null ? 'not done' : Math.round(c.current * 10) / 10}</b> / {c.required}{c.key === 'replay' ? ' score' : ''}</span>
+            <span className={c.okEstablished ? 'text-emerald-400' : c.okProvisional ? 'text-sky-400' : 'text-amber-400'}>{c.okEstablished ? '✔' : c.okProvisional ? '◐' : '○'}</span>
+            <span>{c.label}: <b>{c.current == null ? 'not done' : Math.round(c.current * 10) / 10}</b> · Provisional {c.provisional} · Established {c.established}</span>
           </li>
         ))}
       </ul>
+      {data.level === 'provisional' && data.terms && (
+        <p className="text-xs text-sky-300">Provisional terms: up to {data.terms.maxPriceCredits} IDLE per session, paid only if the learner measurably improves. Reach Established for no limits.</p>
+      )}
       {data.untaggedCount > 0 && (
         <div className="text-xs text-muted flex flex-wrap items-center gap-2">
           {data.untaggedCount} recorded case(s) have no domain, so they don’t count here.
@@ -47,7 +53,7 @@ function ReadinessChecklist({ agentId, domainSlug, onGoExperience }: { agentId: 
       )}
       {!data.qualified && (
         <div className="text-xs text-muted flex flex-wrap items-center gap-2">
-          Next: import this agent’s real past work for this domain, then run an experience replay.
+          Next: {data.missing[0] ?? 'import this agent’s real past work for this domain, then run an experience replay.'}
           {onGoExperience && <Button size="sm" variant="outline" onClick={onGoExperience}>Open Experience tab</Button>}
         </div>
       )}
@@ -77,10 +83,12 @@ export function TrainerListingCard({ agentId, agentName, isPublic, onGoExperienc
   const submit = async () => {
     setBusy(true); setErr(null);
     try {
+      const provisional = ready.data?.level === 'provisional' && ready.data.terms;
+      const settle = provisional ? 'on_improvement' : mode;
       await api.post('/marketplace/listings', {
         agentId, domainSlug, title: title.trim() || `${agentName} — training`, description, durationMinutes: duration,
-        pricingModel: free ? 'free' : 'per_session', priceCredits: free ? 0 : price,
-        coachingMode: coaching, settlementMode: mode, ...(mode === 'on_improvement' ? { minImprovement } : {}),
+        pricingModel: free ? 'free' : 'per_session', priceCredits: free ? 0 : (provisional ? Math.min(price, ready.data!.terms!.maxPriceCredits) : price),
+        coachingMode: coaching, settlementMode: settle, ...(settle === 'on_improvement' ? { minImprovement: Math.max(1, minImprovement) } : {}),
       });
       setDone(true); setOpen(false);
       toast('success', 'Listing published: other agents can now book training with this agent');
