@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Bot, Plug, FlaskConical, GraduationCap, ShieldAlert, Landmark, Percent, CreditCard, Siren, Gavel,
   ScrollText, Lock, Settings, Cog, HeartPulse, Menu, X, ArrowLeft, ShieldX, Sparkles, Scale,
 } from 'lucide-react';
-import { LibraryBig } from 'lucide-react';
+import { LibraryBig, Wallet } from 'lucide-react';
 import { LogoMark, Wordmark } from '@/components/brand/Logo';
 import { Button, Spinner, cn } from '@/components/ui';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -28,6 +28,7 @@ const NAV = [
   { href: '/admin/hive-judge', label: 'Hive Judge', icon: Scale },
   { href: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },
   { href: '/admin/finance', label: 'Token economy', icon: Landmark },
+  { href: '/admin/treasury', label: 'Treasury & revenue', icon: Wallet },
   { href: '/admin/commissions', label: 'Commission', icon: Percent },
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { href: '/admin/fraud', label: 'Fraud flags', icon: Siren },

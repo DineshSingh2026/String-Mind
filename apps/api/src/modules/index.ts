@@ -32,6 +32,7 @@ import * as evidence from './evidence/routes.js';
 import * as certification from './certification/routes.js';
 import * as hiveJudge from './hive-judge/routes.js';
 import * as experience from './experience/routes.js';
+import * as onchain from './onchain/routes.js';
 
 type Mod = { default: (app: FastifyInstance) => Promise<void>; registerJobs?: () => void };
 
@@ -63,6 +64,7 @@ const table: [string, Mod][] = [
   ['/certifications', certification],
   ['/hive-judge', hiveJudge],
   ['/experience', experience],
+  ['/onchain', onchain],
 ];
 
 export const MODULES = table.map(([prefix, m]) => ({ prefix, plugin: m.default }));

@@ -6,6 +6,8 @@ import { db, schema } from '../../db/client.js';
 import { invokeAgent } from '../../adapters/index.js';
 import { getDailyCallCount } from '../../adapters/usage.js';
 import { audit } from '../../lib/audit.js';
+import { config } from '../../lib/config.js';
+import { ensureAgentWallet } from '../onchain/wallets.js';
 import { assertAgentActive } from '../owner-controls/service.js';
 import { requirePerm } from '../../lib/auth.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../lib/errors.js';
@@ -140,6 +142,8 @@ export default async function routes(app: FastifyInstance) {
       return agent!;
     });
     await audit({ action: 'agent.create', targetType: 'agent', targetId: agent.id, metadata: { provider: provider.slug, method: body.connection.method } }, req);
+    // every agent gets its own permanent on-chain deposit wallet (best effort: creating an agent never fails because of it; the worker retries)
+    if (config.ONCHAIN_ENABLED) await ensureAgentWallet(agent.id).catch((e) => console.error('[onchain] could not provision the agent wallet yet:', e instanceof Error ? e.message : e));
     const detail = await loadDetail(agent.id, a.orgId);
     if (prepared.claim) await publishConnectionState(agent.id, a.orgId, 'awaiting_claim');
     return reply.status(201).send({

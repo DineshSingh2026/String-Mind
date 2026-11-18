@@ -5,6 +5,7 @@ import { seed } from './db/seed.js';
 import { config } from './lib/config.js';
 import { startWorker, stopWorker } from './jobs/queue.js';
 import { registerAllJobs } from './modules/index.js';
+import { ensureOnchainTickScheduled } from './modules/onchain/worker.js';
 
 async function main() {
   const db = await initDb();
@@ -14,6 +15,7 @@ async function main() {
   const app = await buildApp();
   await app.listen({ port: config.PORT, host: config.HOST });
   await startWorker();
+  await ensureOnchainTickScheduled().catch((e) => console.error('[onchain] could not schedule the worker', e));
   console.log(`\n  Hive Mind API ready  →  http://localhost:${config.PORT}   (db: ${config.DATABASE_URL ? 'postgres' : 'pglite ' + config.PGLITE_DIR})\n`);
 
   let shuttingDown = false;

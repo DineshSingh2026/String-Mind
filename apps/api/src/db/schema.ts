@@ -10,9 +10,10 @@
  *   (see lib/tenancy.ts) unless the row is explicitly public (marketplace).
  * - ledger_entries and audit_logs are append-only (enforced by DB triggers in db/bootstrap.ts).
  */
+import { sql } from 'drizzle-orm';
 import {
   pgTable, uuid, text, timestamp, integer, boolean, jsonb, real, bigint,
-  uniqueIndex, index, primaryKey, customType,
+  uniqueIndex, index, primaryKey, customType, numeric, check,
 } from 'drizzle-orm/pg-core';
 
 export const EMBEDDING_DIMS = 256;
@@ -1448,3 +1449,213 @@ export const experienceReplayItems = pgTable('experience_replay_items', {
   taskId: uuid('task_id'),
   gradedAt: timestamp('graded_at', { withTimezone: true }),
 }, (t) => [index('experience_replay_items_replay_idx').on(t.replayId, t.ordinal)]);
+
+
+/* ───────────────────────────── On-chain wallets & payment gateway (Solana) ───────────────────────────── */
+/*
+ * No private key, seed or secret ever lives in these tables: only public addresses, derivation metadata and
+ * transaction signatures (plus the signed bytes of an in-flight transaction, which hold signatures, not keys).
+ *
+ *   AGENT  every agent's own permanent deposit wallet — key re-derived on demand from the master seed
+ *   MID    Treasury: receives swept deposits, pays gas, pays withdrawals — key from the secret provider
+ *   ADMIN  Revenue: only ever receives platform fees (from MID) — its key is never loaded by this app
+ */
+const raw = (name: string) => numeric(name, { precision: 30, scale: 0 });
+
+export const solanaWallets = pgTable('solana_wallets', {
+  id: id(),
+  /** 'AGENT' | 'MID' | 'ADMIN' */
+  role: text('role').notNull(),
+  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'restrict' }),
+  publicAddress: text('public_address').notNull(),
+  /** 'derived' (re-derivable from the master seed) | 'secret' (held in the secret provider: MID) | 'external' (never available here: ADMIN) */
+  keySource: text('key_source').notNull(),
+  derivationScope: text('derivation_scope'),
+  derivationId: uuid('derivation_id'),
+  keyVersion: integer('key_version').notNull().default(1),
+  /** 'active' | 'retired' */
+  status: text('status').notNull().default('active'),
+  /** Deposit scanner cursor: newest block time already scanned. */
+  lastScannedBlockTime: bigint('last_scanned_block_time', { mode: 'number' }),
+  lastScannedAt: timestamp('last_scanned_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  check('ck_solana_wallets_role', sql`${t.role} in ('AGENT','MID','ADMIN')`),
+  check('ck_solana_wallets_agent_role', sql`(${t.role} = 'AGENT') = (${t.agentId} is not null)`),
+  uniqueIndex('uq_solana_wallets_address').on(t.publicAddress),
+  uniqueIndex('uq_solana_wallets_active_agent').on(t.agentId).where(sql`role = 'AGENT' and status = 'active'`),
+  uniqueIndex('uq_solana_wallets_active_platform_role').on(t.role).where(sql`role in ('MID','ADMIN') and status = 'active'`),
+]);
+
+/**
+ * One incoming transfer of one supported asset into one agent wallet.
+ * detected → verified (priced; amounts fixed forever) → sweeping (sweep tx signed, signature committed BEFORE broadcast)
+ * → swept → credited (IDLE ledger credit, exactly once). rejected = never credited (internal transfer / dust); failed = parked for an admin.
+ */
+export const blockchainDeposits = pgTable('blockchain_deposits', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'restrict' }),
+  walletId: uuid('wallet_id').notNull().references(() => solanaWallets.id, { onDelete: 'restrict' }),
+  txSignature: text('tx_signature').notNull(),
+  /** 'api' | 'scanner' */
+  detectedVia: text('detected_via').notNull(),
+  sourceAddress: text('source_address'),
+  destinationAddress: text('destination_address').notNull(),
+  /** SPL deposits: the token account that received the funds (swept from here). */
+  destinationTokenAccount: text('destination_token_account'),
+  /** 'USDC' | 'USDT' | 'SOL' | 'IDLEMINE' */
+  asset: text('asset').notNull(),
+  mintAddress: text('mint_address'),
+  decimals: integer('decimals').notNull(),
+  rawAmount: raw('raw_amount').notNull(),
+  blockTime: timestamp('block_time', { withTimezone: true }),
+  slot: bigint('slot', { mode: 'number' }),
+  assetUsdPrice: text('asset_usd_price'),
+  usdValue: text('usd_value'),
+  idlemineUsdPrice: text('idlemine_usd_price'),
+  /** exact IDLEMINE value of the deposit (decimal string) */
+  idlemineAmount: text('idlemine_amount'),
+  /** whole IDLE credited to the owner's wallet (the fractional remainder stays in the Treasury) */
+  idleCredited: bigint('idle_credited', { mode: 'number' }),
+  priceSource: text('price_source'),
+  pricedAt: timestamp('priced_at', { withTimezone: true }),
+  /** 'detected' | 'verified' | 'sweeping' | 'swept' | 'credited' | 'rejected' | 'failed' */
+  status: text('status').notNull().default('detected'),
+  rejectionReason: text('rejection_reason'),
+  sweepSignature: text('sweep_signature'),
+  sweepTxB64: text('sweep_tx_b64'),
+  sweepLastValidBlockHeight: bigint('sweep_last_valid_block_height', { mode: 'number' }),
+  sweepAttempts: integer('sweep_attempts').notNull().default(0),
+  /** Normally == rawAmount. Smaller only for SOL when sweeping everything would leave the wallet below rent exemption. */
+  sweptRawAmount: raw('swept_raw_amount'),
+  ledgerTxId: uuid('ledger_tx_id'),
+  lastError: text('last_error'),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  sweptAt: timestamp('swept_at', { withTimezone: true }),
+  creditedAt: timestamp('credited_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  check('ck_blockchain_deposits_asset', sql`${t.asset} in ('USDC','USDT','SOL','IDLEMINE')`),
+  check('ck_blockchain_deposits_status', sql`${t.status} in ('detected','verified','sweeping','swept','credited','rejected','failed')`),
+  check('ck_blockchain_deposits_raw_positive', sql`${t.rawAmount} > 0`),
+  // Hard replay guard: one row per (transaction, wallet, asset), ever.
+  uniqueIndex('uq_blockchain_deposits_sig_wallet_asset').on(t.txSignature, t.walletId, t.asset),
+  uniqueIndex('uq_blockchain_deposits_sweep_signature').on(t.sweepSignature).where(sql`sweep_signature is not null`),
+  index('ix_blockchain_deposits_agent_created').on(t.agentId, t.createdAt),
+  index('ix_blockchain_deposits_open').on(t.status).where(sql`status in ('detected','verified','sweeping','swept')`),
+]);
+
+/**
+ * Platform fee mirror: Treasury (MID) → Revenue (ADMIN) SPL TransferChecked of the commission the ledger booked.
+ * pending → sending → completed. The in-flight signature (and signed bytes) is committed BEFORE broadcast, so a crash or
+ * RPC timeout is always resolved by asking the chain about that exact signature — never by sending again.
+ */
+export const onchainSettlements = pgTable('onchain_settlements', {
+  id: id(),
+  /** 'platform_fee' */
+  kind: text('kind').notNull().default('platform_fee'),
+  /** 'training_session' | 'knowledge_listing' */
+  sourceType: text('source_type').notNull(),
+  sourceId: uuid('source_id').notNull(),
+  amountIdle: bigint('amount_idle', { mode: 'number' }).notNull(),
+  amountRaw: raw('amount_raw').notNull(),
+  mintAddress: text('mint_address').notNull(),
+  sourceWallet: text('source_wallet').notNull(),
+  destinationWallet: text('destination_wallet').notNull(),
+  /** 'pending' | 'sending' | 'completed' | 'failed' */
+  status: text('status').notNull().default('pending'),
+  transferSignature: text('transfer_signature'),
+  pendingSignature: text('pending_signature'),
+  pendingTxB64: text('pending_tx_b64'),
+  pendingLastValidBlockHeight: bigint('pending_last_valid_block_height', { mode: 'number' }),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  lastError: text('last_error'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, (t) => [
+  check('ck_onchain_settlements_status', sql`${t.status} in ('pending','sending','completed','failed')`),
+  check('ck_onchain_settlements_amount_positive', sql`${t.amountRaw} > 0`),
+  uniqueIndex('uq_onchain_settlements_fee').on(t.sourceType, t.sourceId).where(sql`kind = 'platform_fee'`),
+  index('ix_onchain_settlements_open').on(t.status).where(sql`status in ('pending','sending')`),
+]);
+
+/** An agent's registered external withdrawal address. A change starts 'pending' and only becomes active after the cooldown. */
+export const agentPayoutAddresses = pgTable('agent_payout_addresses', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  address: text('address').notNull(),
+  /** 'pending' | 'active' | 'superseded' | 'cancelled' */
+  status: text('status').notNull(),
+  effectiveAt: timestamp('effective_at', { withTimezone: true }).notNull(),
+  createdAt: createdAt(),
+}, (t) => [
+  check('ck_agent_payout_addresses_status', sql`${t.status} in ('pending','active','superseded','cancelled')`),
+  index('ix_agent_payout_addresses_agent').on(t.agentId),
+  uniqueIndex('uq_agent_payout_addresses_active').on(t.agentId).where(sql`status = 'active'`),
+  uniqueIndex('uq_agent_payout_addresses_pending').on(t.agentId).where(sql`status = 'pending'`),
+]);
+
+/**
+ * IDLE → on-chain withdrawal. The IDLE is reserved (available → locked) when requested, paid from the Treasury, and
+ * burned (locked → external) once the chain confirms; a declined withdrawal refunds it.
+ */
+export const onchainWithdrawals = pgTable('onchain_withdrawals', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'restrict' }),
+  requestedBy: uuid('requested_by').references(() => users.id),
+  amountIdle: bigint('amount_idle', { mode: 'number' }).notNull(),
+  destinationWallet: text('destination_wallet').notNull(),
+  /** 'pending' | 'processing' | 'completed' | 'failed' */
+  status: text('status').notNull().default('pending'),
+  txSignature: text('tx_signature'),
+  payoutLastValidBlockHeight: bigint('payout_last_valid_block_height', { mode: 'number' }),
+  /** signed bytes while 'processing' — an unconfirmed payout is rebroadcast, never re-signed */
+  payoutTxB64: text('payout_tx_b64'),
+  payoutSource: text('payout_source'),
+  /** failed/expired payout attempts (the automatic payer stops at ONCHAIN_MAX_ATTEMPTS and raises an issue) */
+  attempts: integer('attempts').notNull().default(0),
+  reserveTxId: uuid('reserve_tx_id'),
+  finalTxId: uuid('final_tx_id'),
+  note: text('note'),
+  createdAt: createdAt(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, (t) => [
+  check('ck_onchain_withdrawals_amount', sql`${t.amountIdle} > 0`),
+  check('ck_onchain_withdrawals_status', sql`${t.status} in ('pending','processing','completed','failed')`),
+  uniqueIndex('uq_onchain_withdrawals_signature').on(t.txSignature).where(sql`tx_signature is not null`),
+  index('ix_onchain_withdrawals_status').on(t.status, t.createdAt),
+  index('ix_onchain_withdrawals_agent').on(t.agentId, t.createdAt),
+]);
+
+/** A mismatch the reconciliation job found. Money is never "fixed" automatically — an admin reviews and resolves each issue. */
+export const walletReconciliationIssues = pgTable('wallet_reconciliation_issues', {
+  id: id(),
+  kind: text('kind').notNull(),
+  /** 'info' | 'warning' | 'critical' */
+  severity: text('severity').notNull(),
+  refType: text('ref_type').notNull(),
+  refKey: text('ref_key').notNull(),
+  details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+  /** 'open' | 'resolved' */
+  status: text('status').notNull().default('open'),
+  resolutionNote: text('resolution_note'),
+  createdAt: createdAt(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+}, (t) => [
+  uniqueIndex('uq_wallet_recon_issues_open').on(t.kind, t.refType, t.refKey).where(sql`status = 'open'`),
+]);
+
+/** USD price of a mint, sampled by the worker about once a minute (deposits are valued conservatively against these). */
+export const tokenPriceSamples = pgTable('token_price_samples', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  mint: text('mint').notNull(),
+  usdPrice: text('usd_price').notNull(),
+  source: text('source').notNull(),
+  sampledAt: timestamp('sampled_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('ix_token_price_samples_mint_time').on(t.mint, t.sampledAt)]);

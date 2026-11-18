@@ -16,3 +16,9 @@ Hive Mind rewards are **IDLE Tokens**, never money. Pure token economy:
 - `GET /auth/me` gains `welcomeBonus: { granted: boolean, amount: number, grantedAt: string | null }`.
 - New notification on grant: type `payment_update`, title "Welcome to Hive Mind — 1,000 IDLE Tokens added".
 - Prices (`priceCredits` fields on listings/requests/sessions) are IDLE amounts — field names unchanged.
+
+## On-chain gateway (optional, off by default)
+
+With `ONCHAIN_ENABLED=false` (the default) everything above holds. With it on, IDLE can be deposited to and withdrawn from
+Solana (1 IDLE = 1 IDLEMINE) through per-agent wallets and a Treasury; platform commission is mirrored to a Revenue wallet.
+See [ONCHAIN_GATEWAY.md](ONCHAIN_GATEWAY.md). Welcome-bonus IDLE is never withdrawable until spent.

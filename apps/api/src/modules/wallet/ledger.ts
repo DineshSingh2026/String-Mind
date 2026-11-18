@@ -9,7 +9,8 @@
  * corrections are new transactions (`reversalOf`). Every operation has a deterministic
  * idempotency key (unique index on transactions.idempotency_key) so retries never double-post.
  *
- * Unit: IDLE Tokens (docs/IDLE_TOKENS.md). Hive Mind is a pure token economy — IDLE is never money.
+ * Unit: IDLE Tokens (docs/IDLE_TOKENS.md). With the on-chain gateway OFF (the default) Hive Mind is a pure token economy; with it
+ * ON (docs/ONCHAIN_GATEWAY.md) IDLE is minted when a deposit is swept into the Treasury and burned when a withdrawal is paid.
  *
  * Buckets (ledger_entries.bucket) → cached column:
  *   org wallet       available    → wallets.available     spendable IDLE (welcome bonus, earnings, refunds)
@@ -133,6 +134,15 @@ async function post(tx: Tx, p: PostInput): Promise<{ id: string; created: boolea
 
 const sys = (actorUserId?: string | null) => (actorUserId ? 'user' : 'system') as 'user' | 'system';
 
+/* ───────────── commission hooks (on-chain fee mirror) ───────────── */
+
+export interface CommissionEvent { sourceType: 'training_session' | 'knowledge_listing'; sourceId: string; commission: number }
+type CommissionHook = (tx: Tx, e: CommissionEvent) => Promise<void>;
+const commissionHooks: CommissionHook[] = [];
+/** Called INSIDE the settling transaction when platform commission is booked, so the on-chain fee row and the ledger commit together. */
+export function registerCommissionHook(fn: CommissionHook) { if (!commissionHooks.includes(fn)) commissionHooks.push(fn); }
+async function runCommissionHooks(t: Tx, e: CommissionEvent) { if (e.commission > 0) for (const h of commissionHooks) await h(t, e); }
+
 /* ───────────────────────────── commission ───────────────────────────── */
 
 /** Most specific active rule wins: org > domain > global > DEFAULT_COMMISSION_BPS. Latest rule per scope. */
@@ -252,6 +262,7 @@ export async function settleTraining(sessionId: string, opts: SettleOpts, tx?: D
       settlementTxId: r.id, updatedAt: new Date(),
     }).where(eq(schema.trainingSessions.id, sessionId));
     if (r.created) {
+      await runCommissionHooks(t, { sourceType: 'training_session', sourceId: sessionId, commission });
       await audit({ action: 'wallet.training_settle', targetType: 'training_session', targetId: sessionId, orgId: s.trainerOrgId, actorUserId: opts.actorUserId ?? null,
         actorType: opts.viaDispute || opts.adminOverride ? 'admin' : sys(opts.actorUserId), metadata: { transactionId: r.id, outcome: opts.outcome, fee, refund, commission, trainerShare } }, null, t);
       if (refund > 0) await notifyOrg(s.learnerOrgId, 'payment_update', `${fmtIdle(refund)} returned`, `Training "${s.subject}" refunded ${fmtIdle(refund)} to your wallet.`, '/wallet', t);
@@ -389,6 +400,7 @@ export async function purchaseKnowledge(
         ],
       });
       transactionId = r.id;
+      if (r.created) await runCommissionHooks(t, { sourceType: 'knowledge_listing', sourceId: listingId, commission });
       await notifyOrg(l.orgId, 'payment_update', 'Knowledge sale', `"${l.title}" was licensed — you earned ${fmtIdle(l.priceCredits - commission)}.`, '/wallet/earnings', t);
     }
     const [lic] = await t.insert(schema.knowledgeLicences).values({ listingId, buyerOrgId, buyerUserId, agentId: agentId ?? null, transactionId }).returning();
@@ -517,8 +529,9 @@ export async function grantWelcomeBonus(userId: string, tx?: DbOrTx): Promise<{ 
     const key = welcomeKey(userId);
     const [done] = await t.select({ id: schema.transactions.id }).from(schema.transactions).where(eq(schema.transactions.idempotencyKey, key)).limit(1);
     if (done) return { granted: false, transactionId: done.id, amount: WELCOME_BONUS_IDLE };
-    const [u] = await t.select({ defaultOrgId: schema.users.defaultOrgId, status: schema.users.status }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
-    if (!u || !u.defaultOrgId || u.status !== 'active') return { granted: false, transactionId: null, amount: WELCOME_BONUS_IDLE };
+    const [u] = await t.select({ defaultOrgId: schema.users.defaultOrgId, status: schema.users.status, platformRole: schema.users.platformRole }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+    // Platform administrators are controllers, not participants: they never receive tokens.
+    if (!u || !u.defaultOrgId || u.status !== 'active' || u.platformRole !== 'user') return { granted: false, transactionId: null, amount: WELCOME_BONUS_IDLE };
     const w = await getOrCreateWallet(u.defaultOrgId, t);
     const { external } = await platformWallets(t);
     const r = await post(t, {
@@ -548,6 +561,79 @@ export async function bonusTotal(walletId: string, tx?: DbOrTx): Promise<number>
     .innerJoin(schema.transactions, eq(schema.transactions.id, schema.ledgerEntries.transactionId))
     .where(and(eq(schema.ledgerEntries.walletId, walletId), eq(schema.transactions.type, 'welcome_bonus')));
   return Number(r?.total ?? 0);
+}
+
+/* ───────────────────────────── on-chain gateway (deposits / withdrawals) ───────────────────────────── */
+/*
+ * IDLE is minted when a verified deposit has been swept into the Treasury (external → org available) and burned when a
+ * withdrawal is paid out of it (org locked → external): the ledger's external wallet is the on-chain counterparty.
+ * Every operation is idempotent (deterministic idempotency key), so a retried worker step can never post twice.
+ */
+
+/** Credit a swept on-chain deposit to the owning organisation. */
+export async function creditOnchainDeposit(
+  { orgId, depositId, amount, description }: { orgId: string; depositId: string; amount: number; description: string }, tx?: DbOrTx,
+): Promise<{ transactionId: string; created: boolean }> {
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw badRequest('deposit amount must be a positive integer');
+  return withTx(tx, async (t) => {
+    const w = await getOrCreateWallet(orgId, t);
+    const { external } = await platformWallets(t);
+    const r = await post(t, {
+      type: 'onchain_deposit', idempotencyKey: `onchain:deposit:${depositId}`, orgId, referenceType: 'blockchain_deposit', referenceId: depositId, description,
+      legs: [{ walletId: external.id, bucket: 'external', amount: -amount }, { walletId: w.id, bucket: 'available', amount, totals: { purchasedTotal: amount } }],
+    });
+    return { transactionId: r.id, created: r.created };
+  });
+}
+
+/** IDLE the organisation may withdraw: spendable IDLE minus welcome-bonus IDLE that has not been spent yet (bonuses are not backed by a deposit). */
+export async function withdrawableIdle(orgId: string, tx?: DbOrTx): Promise<{ available: number; unspentBonus: number; withdrawable: number }> {
+  const w = await getOrCreateWallet(orgId, tx);
+  const bonus = await bonusTotal(w.id, tx);
+  const unspentBonus = Math.max(0, bonus - w.spentTotal);
+  return { available: w.available, unspentBonus, withdrawable: Math.max(0, w.available - unspentBonus) };
+}
+
+/** Reserve IDLE for an on-chain withdrawal (available → locked). 402 if the organisation lacks the IDLE. */
+export async function reserveWithdrawal(
+  { orgId, withdrawalId, amount, userId }: { orgId: string; withdrawalId: string; amount: number; userId?: string | null }, tx?: DbOrTx,
+): Promise<{ transactionId: string }> {
+  return withTx(tx, async (t) => {
+    const w = await getOrCreateWallet(orgId, t);
+    const r = await post(t, {
+      type: 'onchain_withdrawal_reserve', idempotencyKey: `onchain:wd:reserve:${withdrawalId}`, orgId, referenceType: 'onchain_withdrawal', referenceId: withdrawalId,
+      description: `Withdrawal reserved: ${fmtIdle(amount)}`, createdBy: userId ?? null,
+      legs: [{ walletId: w.id, bucket: 'available', amount: -amount }, { walletId: w.id, bucket: 'locked', amount }],
+    });
+    return { transactionId: r.id };
+  });
+}
+
+/** The payout confirmed on-chain: burn the reserved IDLE (locked → external). */
+export async function finalizeWithdrawal({ orgId, withdrawalId, amount }: { orgId: string; withdrawalId: string; amount: number }, tx?: DbOrTx): Promise<{ transactionId: string }> {
+  return withTx(tx, async (t) => {
+    const w = await getOrCreateWallet(orgId, t);
+    const { external } = await platformWallets(t);
+    const r = await post(t, {
+      type: 'onchain_withdrawal', idempotencyKey: `onchain:wd:final:${withdrawalId}`, orgId, referenceType: 'onchain_withdrawal', referenceId: withdrawalId,
+      description: `Withdrawn on-chain: ${fmtIdle(amount)}`,
+      legs: [{ walletId: w.id, bucket: 'locked', amount: -amount }, { walletId: external.id, bucket: 'external', amount }],
+    });
+    return { transactionId: r.id };
+  });
+}
+
+/** A declined withdrawal: release the reserve (locked → available). */
+export async function refundWithdrawal({ orgId, withdrawalId, amount }: { orgId: string; withdrawalId: string; amount: number }, tx?: DbOrTx): Promise<{ transactionId: string }> {
+  return withTx(tx, async (t) => {
+    const w = await getOrCreateWallet(orgId, t);
+    const r = await post(t, {
+      type: 'onchain_withdrawal_refund', idempotencyKey: `onchain:wd:refund:${withdrawalId}`, orgId, referenceType: 'onchain_withdrawal', referenceId: withdrawalId,
+      description: `Withdrawal declined — ${fmtIdle(amount)} returned`,
+      legs: [{ walletId: w.id, bucket: 'locked', amount: -amount }, { walletId: w.id, bucket: 'available', amount }],
+    });
+    return { transactionId: r.id };
+  });
 }
 
 /* ───────────────────────────── admin ───────────────────────────── */
