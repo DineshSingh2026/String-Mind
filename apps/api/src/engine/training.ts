@@ -43,7 +43,7 @@ import { invokeAgent, type InvokeContextOptions } from '../adapters/index.js';
 import type { ChatMessage } from '../adapters/types.js';
 import { createAssessment, runAssessment } from './assessment.js';
 import { promptAgentOfflineReason } from '../lib/agent-inbox.js';
-import { accessibleSourceIds, type ContextItem } from './context.js';
+import { accessibleSourceIds, type AgentContext, type ContextItem } from './context.js';
 import { cosine, embed } from './embeddings.js';
 import { gradeResponse } from './evaluator.js';
 import { shingleSimilarity, tokenize } from './embeddings.js';
@@ -68,6 +68,8 @@ interface Plan {
   mode?: 'experience' | 'benchmark';
   heldOutIds?: string[];
   teachingIds?: string[];
+  /** the trainer is offline: it teaches from its RECORDED cases (no live trainer calls); only the learner must be online */
+  trainerRecorded?: boolean;
   preReplayId?: string;
   postReplayId?: string;
   retentionReplayId?: string;
@@ -328,6 +330,7 @@ class Runner {
 
   get plan(): Plan { return this.session.plan as Plan }
   get experienceMode(): boolean { return this.plan.mode === 'experience' }
+  get trainerRecorded(): boolean { return this.plan.mode === 'experience' && this.plan.trainerRecorded === true }
 
   /** Decide experience vs benchmark mode once per session. */
   async decideMode(): Promise<void> {
@@ -483,7 +486,10 @@ class Runner {
       if (!(await this.proceed())) return 'stopped';
       const topic = topics[i]!;
       const topicCases = this.experienceMode && shareKnowledge ? await this.casesForTopic(i, topics.map((t) => t.text)) : [];
-      const reply = this.experienceMode
+      if (this.trainerRecorded && !topicCases.length) { await patchPlan(this.session.id, { topicIndex: i + 1 }); continue; }
+      const reply = this.trainerRecorded
+        ? { text: `From ${this.trainer.name}'s recorded experience on "${topic.text}":\n\n${topicCases.slice(0, 6).map((e, k) => `(${k + 1}) ${renderExperience(e, { max: 700 })}`).join('\n\n')}`, latencyMs: 0, context: null as AgentContext | null }
+        : this.experienceMode
         ? await call(this.trainer.id, [{
           role: 'user',
           content: `Teach the learner agent about: ${topic.text}\nTeach from YOUR OWN recorded experience — the real cases you handled. ` +
@@ -512,7 +518,8 @@ class Runner {
 
       // Candidate artefacts
       const candidates: { type: 'persistent_memory' | 'instruction_update'; content: string; origin: string; ref?: string; experienceId?: string }[] = [];
-      if (screened.ok) {
+      // recorded mode: the cases themselves are transferred below (trainer_experience); the rendered teaching text is not stored twice
+      if (screened.ok && !this.trainerRecorded) {
         const lines = screened.text.split('\n');
         const instr = lines.filter((l) => /^\s*(suggested instruction|instruction update|format tip)\s*:/i.test(l));
         const body = lines.filter((l) => !instr.includes(l) && !/removed by (?:Hive Mind|StringMind|AIX) safety filter/.test(l)).join('\n').trim();
@@ -675,7 +682,9 @@ class Runner {
     await db().update(schema.exercises).set({ learnerResponse: ans.text, status: 'answered' }).where(eq(schema.exercises.id, ex.id));
     const grade = gradeReplayDeterministic({ situation: ex.prompt, answer: ans.text, expected: x.expected, avoid: x.avoid });
     publishSession(this.session.id, 'exercise', { exerciseId: ex.id, correct: grade.score >= 0.6, score: grade.score, failureCategory: grade.repeatedMistake ? 'repeated_mistake' : null });
-    const fb = await call(this.trainer.id, [{
+    const fb = this.trainerRecorded
+      ? { text: `In ${this.trainer.name}'s recorded case:\n${renderExperience(e, { max: 1500 })}` }
+      : await call(this.trainer.id, [{
       role: 'user',
       content: `This exercise was one of your real cases:\n${renderExperience(e, { max: 1500 })}\n\nThe learner answered:\n${answer.text}\n\n` +
         `Hive Mind match with what actually worked: ${Math.round(grade.score * 100)}/100${grade.repeatedMistake ? ' (it repeated the recorded mistake)' : ''}.\n` +
@@ -905,13 +914,29 @@ export async function runTrainingSession(sessionId: string): Promise<void> {
     const trainer = await getAgentWithAdapter(session.trainerAgentId);
     // Training talks to both agents live: a prompt-connected agent that isn't checking in right now would make every
     // call wait out the inbox timeout. Fail immediately (escrow refunded) with instructions instead.
-    for (const [who, id] of [['learner', session.learnerAgentId], ['trainer', session.trainerAgentId]] as const) {
-      const offline = await promptAgentOfflineReason(id);
-      if (offline) { await failSession(sessionId, `The ${who} agent is not available for a live session. ${offline}`); return; }
-    }
     const [domain] = await db().select().from(schema.capabilityDomains).where(eq(schema.capabilityDomains.id, session.domainId)).limit(1);
     if (!domain) throw new Error('Domain not found');
-    const r = new Runner(session, runId, learner.agent, trainer.agent, trainer.adapter, domain);
+    const learnerOffline = await promptAgentOfflineReason(session.learnerAgentId);
+    if (learnerOffline) { await failSession(sessionId, `The learner agent is not available for a live session. ${learnerOffline}`); return; }
+    // The trainer does NOT have to be online: its experience is stored on Hive Mind, so an offline trainer teaches from
+    // its recorded cases (experience mode). Without enough recorded cases a live trainer is still required.
+    const trainerOffline = await promptAgentOfflineReason(session.trainerAgentId);
+    if (trainerOffline && (session.plan as Plan).trainerRecorded !== true) {
+      let plan = session.plan as Plan;
+      if (!plan.mode) {
+        const split = await planExperienceSplit(session, domain.slug);
+        if (split) { await patchPlan(sessionId, { mode: 'experience', heldOutIds: split.heldOutIds, teachingIds: split.teachingIds }); plan = { ...plan, mode: 'experience' }; }
+      }
+      if (plan.mode !== 'experience') { await failSession(sessionId, `The trainer agent is not available for a live session and has too few recorded real cases in ${domain.name} to teach offline. ${trainerOffline}`); return; }
+      await patchPlan(sessionId, { trainerRecorded: true });
+      await logMessage({
+        sessionId, senderRole: 'system', stage: session.stage,
+        content: `${trainer.agent.name} is offline, so it teaches from its recorded real cases on Hive Mind (no live trainer replies). The learner is measured on the trainer's held-back cases as usual; the trainer still earns on completion.`,
+        metadata: { trainerRecorded: true },
+      });
+    }
+    const live = (await loadSession(sessionId)) ?? session;
+    const r = new Runner(live, runId, learner.agent, trainer.agent, trainer.adapter, domain);
     const stages: Record<TrainingStage, () => Promise<StageResult>> = {
       introduction: () => r.introduction(),
       knowledge_sharing: () => r.knowledgeSharing(),
