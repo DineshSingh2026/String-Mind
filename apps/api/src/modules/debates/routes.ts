@@ -25,6 +25,7 @@ import { notifyOrg } from '../../lib/notify.js';
 import { config } from '../../lib/config.js';
 import { registerJob } from '../../jobs/queue.js';
 import { registerChannelGuard } from '../../ws/hub.js';
+import { closeOpenDebate, speak } from './open.js';
 import { assertAgentActive } from '../owner-controls/service.js';
 import {
   DEBATE_ADVANCE_JOB, DEBATE_CLOSE_JOB, DEBATE_SWEEP_JOB, DEFAULT_VOTING_MINUTES, MAX_VOTING_MINUTES, MIN_VOTING_MINUTES,
@@ -38,11 +39,12 @@ const rl = (max: number) => ({ config: { rateLimit: { max: config.isTest ? 10_00
 const PUBLIC_STATUSES = ['live', 'voting', 'closed'];
 
 const CreateBody = z.object({
-  kind: z.enum(['debate', 'challenge']).default('debate'),
+  kind: z.enum(['open', 'debate', 'challenge']).default('debate'),
   title: z.string().trim().min(3).max(140),
   prompt: z.string().trim().min(10).max(2000),
   agentAId: z.string().uuid(),
-  agentBId: z.string().uuid(),
+  /** required for 1-vs-1 debates/challenges; omitted for open debates */
+  agentBId: z.string().uuid().optional(),
   rounds: z.coerce.number().int().min(1).max(5).default(3),
   votingMinutes: z.coerce.number().int().min(MIN_VOTING_MINUTES).max(MAX_VOTING_MINUTES).default(DEFAULT_VOTING_MINUTES),
   domainSlug: z.string().trim().min(1).optional(),
@@ -93,7 +95,14 @@ async function views(rows: Debate[]) {
   }));
 }
 
-const messageView = (m: DebateMessage) => ({ id: m.id, agentId: m.agentId, role: m.role, round: m.round, content: m.content, flagged: m.flagged, flagReason: m.flagReason, createdAt: m.createdAt });
+const messageView = (m: DebateMessage, names?: Map<string, string>) => ({ id: m.id, agentId: m.agentId, agentName: m.agentId ? names?.get(m.agentId) ?? null : null, role: m.role, round: m.round, content: m.content, flagged: m.flagged, flagReason: m.flagReason, createdAt: m.createdAt });
+/** Agent names for a transcript (open debates have many speakers). */
+async function speakerNames(msgs: DebateMessage[]): Promise<Map<string, string>> {
+  const ids = [...new Set(msgs.map((m) => m.agentId).filter((x): x is string => !!x))];
+  if (!ids.length) return new Map();
+  const rows = await db().select({ id: schema.agents.id, name: schema.agents.name }).from(schema.agents).where(inArray(schema.agents.id, ids));
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
 
 /** Live state for the typing / waiting indicator. */
 async function liveState(d: Debate, msgs: DebateMessage[]) {
@@ -142,7 +151,8 @@ export default async function routes(app: FastifyInstance) {
     if (!d || !publiclyVisible(d)) throw notFound('Debate');
     const msgs = await debateMessages(d.id);
     const [view] = await views([d]);
-    return { ...view, messages: msgs.map(messageView), live: await liveState(d, msgs) };
+    const names = await speakerNames(msgs);
+    return { ...view, messages: msgs.map((m) => messageView(m, names)), live: await liveState(d, msgs) };
   });
 
   app.get('/leaderboard', async (req) => {
@@ -226,6 +236,7 @@ export default async function routes(app: FastifyInstance) {
     const a = requireAuth(req);
     const d = await loadForViewer((req.params as { id: string }).id, a);
     const msgs = await debateMessages(d.id);
+    const speakers = await speakerNames(msgs);
     const [view] = await views([d]);
     const refs = await agentRefs([d.agentAId, d.agentBId]);
     const aOrg = refs.get(d.agentAId)?.orgId, bOrg = refs.get(d.agentBId)?.orgId;
@@ -236,7 +247,7 @@ export default async function routes(app: FastifyInstance) {
     const canWrite = !!a.orgId && !!a.orgRole && (a.orgRole === 'owner' || a.orgRole === 'admin' || a.orgRole === 'developer' || a.orgRole === 'trainer' || a.orgRole === 'member');
     return {
       ...view,
-      messages: msgs.map(messageView),
+      messages: msgs.map((m) => messageView(m, speakers)),
       live: await liveState(d, msgs),
       viewer: {
         myVote: vote?.agentId ?? null,
@@ -246,8 +257,10 @@ export default async function routes(app: FastifyInstance) {
         },
         canAccept: canWrite && d.status === 'pending' && !d.agentBAccepted && bOrg === a.orgId,
         canStart: canWrite && d.status === 'pending' && d.agentBAccepted && d.orgId === a.orgId,
-        canCancel: (canWrite && ['pending', 'live'].includes(d.status) && (d.orgId === a.orgId || (d.status === 'live' && bOrg === a.orgId))) || (isAdmin(a) && ['pending', 'live', 'voting'].includes(d.status)),
-        side: aOrg === a.orgId ? 'A' : bOrg === a.orgId ? 'B' : null,
+        canSpeak: canWrite && d.kind === 'open' && d.status === 'live',
+        canClose: d.kind === 'open' && d.status === 'live' && ((canWrite && d.orgId === a.orgId) || isAdmin(a)),
+        canCancel: d.kind !== 'open' && ((canWrite && ['pending', 'live'].includes(d.status) && (d.orgId === a.orgId || (d.status === 'live' && bOrg === a.orgId))) || (isAdmin(a) && ['pending', 'live', 'voting'].includes(d.status))),
+        side: d.kind === 'open' ? null : aOrg === a.orgId ? 'A' : bOrg === a.orgId ? 'B' : null,
       },
     };
   });
@@ -255,6 +268,29 @@ export default async function routes(app: FastifyInstance) {
   app.post('/', rl(10), async (req, reply) => {
     const a = requirePerm(req, 'training.participate');
     const body = parse(CreateBody, req.body);
+    if (body.kind === 'open') {
+      // OPEN debate: no opponent — any owner can bring an agent in with POST /debates/:id/speak
+      const starter = await getAgent(body.agentAId);
+      if (!starter || starter.orgId !== a.orgId) throw notFound('Your agent');
+      if (starter.status !== 'active') throw badRequest(`${starter.name} is ${starter.status} — only active agents can debate`);
+      await assertAgentActive(starter.id);
+      let openDomainId: string | null = null;
+      if (body.domainSlug) {
+        const [dom] = await db().select({ id: schema.capabilityDomains.id }).from(schema.capabilityDomains).where(eq(schema.capabilityDomains.slug, body.domainSlug)).limit(1);
+        openDomainId = dom?.id ?? null;
+      }
+      const now = new Date();
+      const [od] = await db().insert(schema.debates).values({
+        kind: 'open', title: body.title, prompt: body.prompt, domainId: openDomainId, createdBy: a.user.id, orgId: a.orgId,
+        agentAId: starter.id, agentBId: starter.id, agentBAccepted: true, rounds: 0, status: 'live', startedAt: now, createdAt: now, updatedAt: now,
+      }).returning();
+      await hiveMessage(od!.id, `Open debate started by ${starter.name}. Any agent can join: owners bring their agents in with "Add my agent". Every reply passes the Hive Mind safety filter.`);
+      await audit({ action: 'debate.create', targetType: 'debate', targetId: od!.id, metadata: { kind: 'open', agentAId: starter.id } }, req);
+      speak(od!, starter.id).catch((e) => req.log.warn({ err: e }, 'open debate: first contribution failed'));
+      const [ov] = await views([od!]);
+      return reply.status(201).send(ov);
+    }
+    if (!body.agentBId) throw badRequest('Pick an opponent for a 1-vs-1 debate, or choose an open debate');
     if (body.agentAId === body.agentBId) throw badRequest('An agent cannot debate itself — pick a different opponent');
     const agentA = await getAgent(body.agentAId);
     if (!agentA || agentA.orgId !== a.orgId) throw notFound('Your agent');
@@ -290,6 +326,35 @@ export default async function routes(app: FastifyInstance) {
     }
     const [view] = await views([out]);
     return reply.status(201).send(view);
+  });
+
+  /** OPEN debates: bring one of your active agents into the discussion. */
+  app.post('/:id/speak', rl(20), async (req) => {
+    const a = requirePerm(req, 'training.participate');
+    const d = await loadDebate((req.params as { id: string }).id).catch(() => null);
+    if (!d || d.moderation === 'removed') throw notFound('Debate');
+    if (d.kind !== 'open') throw badRequest('Only open debates accept contributions from any agent');
+    if (d.status !== 'live') throw conflict('This debate is closed');
+    const { agentId } = parse(z.object({ agentId: z.string().uuid() }), req.body);
+    const ag = await getAgent(agentId);
+    if (!ag || ag.orgId !== a.orgId) throw notFound('Your agent');
+    if (ag.status !== 'active') throw badRequest(`${ag.name} is ${ag.status} — only active agents can join`);
+    await assertAgentActive(ag.id);
+    const result = await speak(d, ag.id);
+    return { ok: true, result, message: result === 'waiting' ? `${ag.name} is connected via prompt — its reply appears when it next checks in.` : `${ag.name} joined the debate.` };
+  });
+
+  app.post('/:id/close', rl(20), async (req) => {
+    const a = requirePerm(req, 'training.participate');
+    const d = await loadDebate((req.params as { id: string }).id).catch(() => null);
+    if (!d) throw notFound('Debate');
+    if (d.kind !== 'open') throw badRequest('Only open debates are closed this way');
+    if (d.orgId !== a.orgId && !isAdmin(a)) throw forbidden('Only the debate creator can close it');
+    const u = await closeOpenDebate(d);
+    if (!u) throw conflict('This debate is already closed');
+    await audit({ action: 'debate.close', targetType: 'debate', targetId: d.id, metadata: { kind: 'open' } }, req);
+    const [v] = await views([u]);
+    return v;
   });
 
   async function loadForWrite(req: FastifyRequest) {

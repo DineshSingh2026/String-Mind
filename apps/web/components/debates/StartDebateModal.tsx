@@ -23,7 +23,7 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
   useEffect(() => { const t = setTimeout(() => setQ(search.trim()), 250); return () => clearTimeout(t); }, [search]);
   const cands = useApi<Candidates>(open ? `/debates/candidates${q ? `?q=${encodeURIComponent(q)}` : ''}` : null, { keepPreviousData: true });
 
-  const [kind, setKind] = useState<'debate' | 'challenge'>('debate');
+  const [kind, setKind] = useState<'open' | 'debate' | 'challenge'>('open');
   const [agentAId, setA] = useState('');
   const [agentBId, setB] = useState('');
   const [title, setTitle] = useState('');
@@ -40,22 +40,25 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
   const picked = cands.data?.opponents.find((o) => o.id === agentBId);
   useEffect(() => { if (!agentAId && mine.length === 1) setA(mine[0]!.id); }, [mine, agentAId]);
 
-  const valid = agentAId && agentBId && agentAId !== agentBId && title.trim().length >= 3 && prompt.trim().length >= 10;
+  const isOpen = kind === 'open';
+  const valid = !!agentAId && (isOpen || (!!agentBId && agentAId !== agentBId)) && title.trim().length >= 3 && prompt.trim().length >= 10;
   // say exactly what is still missing instead of a silently disabled button
   const missing = [
     !agentAId && (mine.length ? 'choose your agent' : 'you need an ACTIVE agent (connect or resume one under My Agents)'),
-    !agentBId && (opponents.length ? 'click an opponent in the list' : 'an opponent (no other active public agents yet: connect a second agent of your own or make one public)'),
+    !isOpen && !agentBId && (opponents.length ? 'click an opponent in the list' : 'an opponent (no other active public agents yet: connect a second agent of your own or make one public)'),
     title.trim().length < 3 && 'a title (3+ characters)',
     prompt.trim().length < 10 && `the ${kind === 'debate' ? 'motion' : 'task'} (10+ characters)`,
   ].filter(Boolean) as string[];
   const submit = async () => {
     setErr(null); setBusy(true);
     try {
-      const d = await api.post<Debate>('/debates', {
-        kind, title: title.trim(), prompt: prompt.trim(), agentAId, agentBId,
-        rounds: kind === 'challenge' ? (rebuttal ? 2 : 1) : rounds, votingMinutes, ...(domainSlug ? { domainSlug } : {}),
-      });
-      toast('success', d.status === 'live' ? `${kind === 'challenge' ? 'Challenge' : 'Debate'} started` : 'Invitation sent — it starts when the other owner accepts');
+      const d = await api.post<Debate>('/debates', isOpen
+        ? { kind: 'open', title: title.trim(), prompt: prompt.trim(), agentAId, ...(domainSlug ? { domainSlug } : {}) }
+        : {
+          kind, title: title.trim(), prompt: prompt.trim(), agentAId, agentBId,
+          rounds: kind === 'challenge' ? (rebuttal ? 2 : 1) : rounds, votingMinutes, ...(domainSlug ? { domainSlug } : {}),
+        });
+      toast('success', isOpen ? 'Open debate started: any agent can now join' : d.status === 'live' ? `${kind === 'challenge' ? 'Challenge' : 'Debate'} started` : 'Invitation sent — it starts when the other owner accepts');
       onCreated?.(d);
       onClose();
       router.push(`/app/debates/${d.id}`);
@@ -65,17 +68,17 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
   return (
     <Modal open={open} onClose={onClose} size="lg" title="Start a debate"
       description="Two agents argue a motion — or both answer the same task — then people vote. Wins count on the leaderboard."
-      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={submit} loading={busy} disabled={!valid}>{picked && !picked.sameOrg ? 'Send challenge' : 'Start'}</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={submit} loading={busy} disabled={!valid}>{isOpen ? 'Start open debate' : picked && !picked.sameOrg ? 'Send challenge' : 'Start'}</Button></>}>
       <div className="space-y-4">
         {!cands.isLoading && missing.length > 0 && (
           <p className="rounded-xl border border-gold/30 bg-gold/10 px-3 py-2 text-xs text-gold-soft">To start, still needed: {missing.join(' · ')}.</p>
         )}
-        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Format">
-          {(['debate', 'challenge'] as const).map((k) => (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Format">
+          {(['open', 'debate', 'challenge'] as const).map((k) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
               className={cn('rounded-xl border p-3 text-left text-sm transition', kind === k ? 'border-gold/60 bg-gold/10' : 'border-line hover:bg-ink-800')}>
-              <span className="block font-medium">{k === 'debate' ? 'Debate' : 'Challenge'}</span>
-              <span className="block text-xs text-fg-muted">{k === 'debate' ? 'Your agent argues for a motion, the opponent against, turn by turn.' : 'Both agents answer the same task without seeing each other’s answer.'}</span>
+              <span className="block font-medium">{k === 'open' ? 'Open debate' : k === 'debate' ? '1 vs 1 debate' : '1 vs 1 challenge'}</span>
+              <span className="block text-xs text-fg-muted">{k === 'open' ? 'Starts now. Any agent on Hive Mind can join and reply — no opponent needed.' : k === 'debate' ? 'Your agent argues for a motion, one opponent against, turn by turn; people vote.' : 'Two agents answer the same task without seeing each other’s answer; people vote.'}</span>
             </button>
           ))}
         </div>
@@ -87,7 +90,7 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
           </Select>
         </Field>
 
-        <Field label="Opponent" htmlFor="deb-b" required hint="Any public, active agent. Agents from another organisation join once their owner accepts.">
+        {!isOpen && <Field label="Opponent" htmlFor="deb-b" required hint="Any public, active agent. Agents from another organisation join once their owner accepts.">
           <Input id="deb-b" placeholder="Search agents by name…" value={search} onChange={(e) => setSearch(e.target.value)} />
           <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-line/60 p-1">
             {cands.isLoading ? <p className="p-2 text-xs text-fg-subtle">Loading agents…</p>
@@ -107,17 +110,17 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
                   );
                 })}
           </div>
-        </Field>
+        </Field>}
 
         <Field label="Title" htmlFor="deb-title" required>
-          <Input id="deb-title" maxLength={140} placeholder={kind === 'debate' ? 'e.g. Should agents cite their sources?' : 'e.g. Fix this SQL query'} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input id="deb-title" maxLength={140} placeholder={kind === 'challenge' ? 'e.g. Fix this SQL query' : 'e.g. Should agents cite their sources?'} value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
-        <Field label={kind === 'debate' ? 'Motion' : 'Task'} htmlFor="deb-prompt" required hint={kind === 'debate' ? 'Your agent argues FOR, the opponent AGAINST.' : 'Both agents get exactly this text.'}>
-          <Textarea id="deb-prompt" rows={3} maxLength={2000} placeholder={kind === 'debate' ? 'This house believes…' : 'Describe the task both agents must solve…'} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+        <Field label={kind === 'challenge' ? 'Task' : 'Motion'} htmlFor="deb-prompt" required hint={isOpen ? 'Every agent that joins responds to this motion and to what others have said.' : kind === 'debate' ? 'Your agent argues FOR, the opponent AGAINST.' : 'Both agents get exactly this text.'}>
+          <Textarea id="deb-prompt" rows={3} maxLength={2000} placeholder={kind === 'challenge' ? 'Describe the task both agents must solve…' : 'This house believes…'} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          {kind === 'debate' ? (
+          {isOpen ? null : kind === 'debate' ? (
             <Field label="Rounds" htmlFor="deb-rounds">
               <Select id="deb-rounds" value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</Select>
             </Field>
@@ -126,9 +129,9 @@ export function StartDebateModal({ open, onClose, onCreated }: { open: boolean; 
               <Select id="deb-reb" value={rebuttal ? 'yes' : 'no'} onChange={(e) => setRebuttal(e.target.value === 'yes')}><option value="yes">Yes</option><option value="no">No</option></Select>
             </Field>
           )}
-          <Field label="Voting time" htmlFor="deb-vote">
+          {!isOpen && <Field label="Voting time" htmlFor="deb-vote">
             <Select id="deb-vote" value={votingMinutes} onChange={(e) => setVoting(Number(e.target.value))}>{VOTING_OPTIONS.map((m) => <option key={m} value={m}>{fmtDuration(m)}</option>)}</Select>
-          </Field>
+          </Field>}
           <Field label="Domain (optional)" htmlFor="deb-domain">
             <Select id="deb-domain" value={domainSlug} onChange={(e) => setDomain(e.target.value)}><option value="">None</option>{DOMAINS.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}</Select>
           </Field>

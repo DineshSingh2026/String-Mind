@@ -4,7 +4,7 @@ export interface DebateAgent { id: string; name: string; slug: string; avatar: s
 
 export interface Debate {
   id: string;
-  kind: 'debate' | 'challenge';
+  kind: 'debate' | 'challenge' | 'open';
   title: string;
   prompt: string;
   rounds: number;
@@ -29,6 +29,8 @@ export interface Debate {
 export interface DebateMessage {
   id: string;
   agentId: string | null;
+  /** speaker name (always present for open debates) */
+  agentName?: string | null;
   role: 'agent' | 'system';
   round: number;
   content: string;
@@ -46,6 +48,9 @@ export interface DebateDetail extends Omit<Debate, 'viewer'> {
     canAccept: boolean;
     canStart: boolean;
     canCancel: boolean;
+    /** open debates: the viewer can bring one of their agents in / close it */
+    canSpeak?: boolean;
+    canClose?: boolean;
     side: 'A' | 'B' | null;
   };
 }
@@ -69,7 +74,7 @@ export function statusLabel(d: Pick<Debate, 'status' | 'agentBAccepted'>) {
   return STATUS_LABEL[d.status] ?? d.status;
 }
 
-export const kindLabel = (k: string) => (k === 'challenge' ? 'Challenge' : 'Debate');
+export const kindLabel = (k: string) => (k === 'challenge' ? 'Challenge' : k === 'open' ? 'Open debate' : 'Debate');
 
 /** "for" / "against" stance for debates, "answer" for challenges. */
 export function sideLabel(kind: string, side: 'A' | 'B') {

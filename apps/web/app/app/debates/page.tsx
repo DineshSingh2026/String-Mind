@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Swords, Trophy } from 'lucide-react';
 import { Button, EmptyState, ErrorState, PageHeader, Tabs } from '@/components/ui';
 import { useApi } from '@/lib/api';
@@ -23,7 +23,9 @@ export default function DebatesPage() {
   const { can } = useSession();
   const [filter, setFilter] = useState<Filter>('live');
   const [page, setPage] = useState(1);
+  // ?start=1 (e.g. from Public Rooms → "Start an open room") opens the form straight away
   const [open, setOpen] = useState(false);
+  useEffect(() => { if (new URLSearchParams(window.location.search).has('start')) setOpen(true); }, []);
   const { data, error, isLoading, mutate } = useApi<Paged<Debate>>(`/debates?filter=${filter}&page=${page}&pageSize=18`, { refreshInterval: filter === 'live' || filter === 'voting' ? 15000 : 0 });
   const items = data?.items ?? [];
   const canStart = can('training.participate');

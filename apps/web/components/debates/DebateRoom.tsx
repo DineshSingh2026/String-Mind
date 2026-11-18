@@ -82,7 +82,7 @@ export function FaceOff({ d, agentHref, actions }: { d: DebateDetail; agentHref?
         <DebateStatusPill d={d} />
         {d.domain && <Badge>{d.domain.name}</Badge>}
         <span className="text-xs text-fg-subtle">
-          {d.kind === 'challenge' ? (d.rounds > 1 ? 'Answers + 1 rebuttal' : 'One answer each') : `${d.rounds} round${d.rounds === 1 ? '' : 's'}`} · voting {fmtDuration(d.votingMinutes)}
+          {d.kind === 'open' ? 'Any agent can join' : <>{d.kind === 'challenge' ? (d.rounds > 1 ? 'Answers + 1 rebuttal' : 'One answer each') : `${d.rounds} round${d.rounds === 1 ? '' : 's'}`} · voting {fmtDuration(d.votingMinutes)}</>}
         </span>
         {left && <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-xs tabular-nums text-gold-soft"><Clock className="h-3.5 w-3.5" />{left}</span>}
       </div>
@@ -90,6 +90,9 @@ export function FaceOff({ d, agentHref, actions }: { d: DebateDetail; agentHref?
       <p className="relative mt-1.5 whitespace-pre-wrap break-words text-sm text-fg-muted">
         <span className="font-medium text-fg">{d.kind === 'challenge' ? 'Task: ' : 'Motion: '}</span>{d.prompt}
       </p>
+      {d.kind === 'open' ? (
+        <OpenParticipants d={d} />
+      ) : (
       <div className="relative mt-5 flex flex-col gap-4 sm:flex-row sm:items-center">
         <Fighter agent={d.agentA} side="A" d={d} href={d.agentA && agentHref ? agentHref(d.agentA) : null} />
         <div className="flex shrink-0 items-center justify-center">
@@ -97,6 +100,7 @@ export function FaceOff({ d, agentHref, actions }: { d: DebateDetail; agentHref?
         </div>
         <Fighter agent={d.agentB} side="B" d={d} href={d.agentB && agentHref ? agentHref(d.agentB) : null} />
       </div>
+      )}
       {actions && <div className="relative mt-5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-4">{actions}</div>}
     </section>
   );
@@ -211,7 +215,8 @@ function RoundMarker({ round, total, kind }: { round: number; total: number; kin
 }
 
 function AgentBubble({ m, agent, right, reportable }: { m: DebateMessage; agent: DebateAgent | null; right: boolean; reportable: boolean }) {
-  const name = agent?.name ?? 'Agent';
+  // open debates have many speakers: prefer the name the API attaches to each message
+  const name = m.agentName ?? agent?.name ?? 'Agent';
   const color = agentColor(m.agentId ?? name);
   return (
     <div className={cn('group flex gap-2.5', right && 'flex-row-reverse')}>
@@ -303,6 +308,21 @@ export function RoomSkeleton() {
     <div className="space-y-4">
       <div className="ax-shimmer h-56 rounded-2xl bg-ink-800/80" />
       <div className="ax-shimmer h-96 rounded-2xl bg-ink-800/80" />
+    </div>
+  );
+}
+
+/** Open debates: everyone who has spoken so far, as overlapping hexagon avatars in their own colours. */
+function OpenParticipants({ d }: { d: DebateDetail }) {
+  const seen = new Map<string, string>();
+  for (const m of d.messages) if (m.role === 'agent' && m.agentId && !seen.has(m.agentId)) seen.set(m.agentId, m.agentName ?? 'Agent');
+  const list = [...seen.entries()];
+  return (
+    <div className="relative mt-5 flex flex-wrap items-center gap-3">
+      <div className="flex -space-x-2">
+        {list.slice(0, 12).map(([id, name]) => <span key={id} title={name} className="rounded-full ring-2 ring-ink-900"><Avatar name={name} seed={id} size={34} /></span>)}
+      </div>
+      <p className="text-sm text-fg-muted">{list.length ? `${list.length} agent${list.length === 1 ? '' : 's'} in the discussion` : 'Waiting for the first contribution'} · <span className="text-fg">open to every agent</span></p>
     </div>
   );
 }

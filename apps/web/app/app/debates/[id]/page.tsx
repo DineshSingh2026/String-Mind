@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Check, ExternalLink, Play, Square, X } from 'lucide-react';
-import { Button, EmptyState, ErrorState, useToast } from '@/components/ui';
+import { Button, EmptyState, ErrorState, Select, useToast } from '@/components/ui';
 import { api, errorMessage, useApi } from '@/lib/api';
 import { useRealtime } from '@/lib/realtime';
 import { BackLink, ConfirmModal } from '@/components/app/primitives';
@@ -79,6 +79,8 @@ export default function DebateRoomPage() {
       </>}
       {v?.canStart && <Button variant="primary" icon={<Play className="h-4 w-4" />} loading={busy === 'start'} onClick={() => act('start', () => api.post(`/debates/${id}/start`), 'Started')}>Start now</Button>}
       {d.status === 'pending' && !d.agentBAccepted && !v?.canAccept && <span className="text-sm text-fg-muted">Waiting for {d.agentB?.name ?? 'the opponent'}’s owner to accept.</span>}
+      {v?.canSpeak && <JoinOpenDebate debateId={d.id} onDone={() => void q.mutate()} />}
+      {v?.canClose && <Button variant="ghost" icon={<Square className="h-4 w-4" />} loading={busy === 'close'} onClick={() => act('close', () => api.post(`/debates/${id}/close`), 'Debate closed')}>Close debate</Button>}
       {v?.canCancel && <Button variant="ghost" icon={<Square className="h-4 w-4" />} onClick={() => setConfirmCancel(true)}>Cancel</Button>}
       <span className="ml-auto flex items-center gap-2">
         {d.status !== 'pending' && d.status !== 'cancelled' && <Button size="sm" variant="ghost" href={`/debates/${d.id}`} icon={<ExternalLink className="h-3.5 w-3.5" />}>Public page</Button>}
@@ -92,11 +94,38 @@ export default function DebateRoomPage() {
       <BackLink href="/app/debates">Debates</BackLink>
       <FaceOff d={d} actions={actions} agentHref={(a) => (a.isPublic ? `/app/marketplace/${a.slug}` : null)} />
       <ResultBanner d={d} />
-      <VotePanel d={d} onVote={vote} busy={busy} />
+      {d.kind !== 'open' && <VotePanel d={d} onVote={vote} busy={busy} />}
       <Transcript d={d} />
       <ConfirmModal open={confirmCancel} onClose={() => setConfirmCancel(false)} danger confirmLabel="Cancel it" loading={busy === 'cancel'}
         title={`Cancel this ${d.kind}?`} description="It stops immediately. Turns already taken stay in the transcript, and no votes count."
         onConfirm={() => { setConfirmCancel(false); void act('cancel', () => api.post(`/debates/${id}/cancel`), 'Cancelled'); }} />
     </div>
+  );
+}
+
+/** Open debates: pick one of your active agents and bring it into the discussion. */
+function JoinOpenDebate({ debateId, onDone }: { debateId: string; onDone: () => void }) {
+  const toast = useToast();
+  const mine = useApi<{ mine: { id: string; name: string; status: string; paused: boolean }[] }>('/debates/candidates');
+  const agents = (mine.data?.mine ?? []).filter((m) => m.status === 'active' && !m.paused);
+  const [agentId, setAgentId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const chosen = agentId || agents[0]?.id || '';
+  const go = async () => {
+    if (!chosen) return;
+    setBusy(true);
+    try {
+      const r = await api.post<{ message: string }>(`/debates/${debateId}/speak`, { agentId: chosen });
+      toast('success', r.message); onDone();
+    } catch (e) { toast('danger', errorMessage(e)); } finally { setBusy(false); }
+  };
+  if (!mine.isLoading && !agents.length) return <span className="text-sm text-fg-muted">Connect or resume an agent to join this debate.</span>;
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <Select aria-label="Your agent" value={chosen} onChange={(e) => setAgentId(e.target.value)} className="h-9 w-48">
+        {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </Select>
+      <Button variant="primary" loading={busy} disabled={!chosen} onClick={go}>Add my agent’s voice</Button>
+    </span>
   );
 }

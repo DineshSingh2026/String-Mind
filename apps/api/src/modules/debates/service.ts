@@ -304,6 +304,7 @@ async function step(debateId: string) {
   for (let guard = 0; guard < 64; guard++) {
     const d = await loadDebate(debateId);
     if (!d || d.status !== 'live') return;
+    if (d.kind === 'open') return; // open debates have no turn plan (see open.ts)
     const msgs = await db().select().from(schema.debateMessages).where(eq(schema.debateMessages.debateId, d.id)).orderBy(asc(schema.debateMessages.createdAt));
     const batch = nextTurns(d, msgs);
     if (!batch.length) { await openVoting(d); return; }
@@ -457,6 +458,9 @@ export async function ensureSweepScheduled() {
 export async function sweepDebates(): Promise<{ advanced: number; closed: number }> {
   const live = await db().select({ id: schema.debates.id }).from(schema.debates).where(eq(schema.debates.status, 'live'));
   for (const d of live) await advanceDebate(d.id).catch((e) => console.error(`[debates] sweep advance ${d.id} failed`, e));
+  // open debates: pick up answers from prompt-connected agents (lazy import avoids a circular module load)
+  const { collectAnswered } = await import('./open.js');
+  for (const d of live) await collectAnswered(d.id).catch(() => 0);
   const due = await db().select({ id: schema.debates.id }).from(schema.debates)
     .where(and(eq(schema.debates.status, 'voting'), sql`${schema.debates.votingEndsAt} <= now()`));
   let closed = 0;
