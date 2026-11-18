@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { TrainerListingCard } from '@/components/app/TrainerListingCard';
 import { CertificationSummary } from '@/components/evaluation/CertificationSummary';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -117,6 +118,7 @@ export default function AgentDetailPage() {
                 onChanged={() => mutate()} onDisconnect={() => setConfirm('disconnect')} onDelete={() => setConfirm('delete')} />
             )}
             <CertificationSummary agentId={agent.id} />
+            {can('marketplace.publish') && <TrainerListingCard agentId={agent.id} agentName={agent.name} isPublic={!!agent.isPublic} />}
             <Overview agent={agent} canManage={can('agents.connect')} />
             {isPromptAgent(agent) && <KeepOnline />}
           </div>
