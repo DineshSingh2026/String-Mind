@@ -17,7 +17,20 @@ export default function HiveJudgePage() {
   const [busy, setBusy] = useState(false);
   const train = async () => {
     setBusy(true);
-    try { await api.post('/hive-judge/train'); await metrics.mutate(); toast('success', 'Hive Judge retrained'); }
+    try {
+      // training runs in the background on the server; poll status until it finishes (max ~3 min)
+      const before = (await api.get<{ model: { version: number } | null }>('/hive-judge/status')).model?.version ?? 0;
+      await api.post('/hive-judge/train');
+      toast('info', 'Retraining started: this usually takes under a minute');
+      let done = false;
+      for (let i = 0; i < 60 && !done; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const st = await api.get<{ training?: boolean; model: { version: number } | null }>('/hive-judge/status').catch(() => null);
+        done = !!st && !st.training && (st.model?.version ?? 0) > before;
+      }
+      await metrics.mutate();
+      toast(done ? 'success' : 'info', done ? 'Hive Judge retrained' : 'Still training: refresh this page in a minute');
+    }
     catch (e) { toast('danger', errorMessage(e)); }
     finally { setBusy(false); }
   };

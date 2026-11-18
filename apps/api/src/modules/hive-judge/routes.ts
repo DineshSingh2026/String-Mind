@@ -8,7 +8,7 @@ import { requireAdmin } from '../../lib/auth.js';
 import { audit } from '../../lib/audit.js';
 import { badRequest, notFound } from '../../lib/errors.js';
 import { parse } from '../../lib/http.js';
-import { hiveJudge, ensureModel, trainAndSave } from '../../engine/hive-judge/index.js';
+import { hiveJudge, ensureModel, trainAndSave, isTraining } from '../../engine/hive-judge/index.js';
 import { llmConfigured, llmModelName } from '../../engine/hive-judge/llm.js';
 import { getReview, listReviews, resolutionsCount, resolveReview } from '../../engine/hive-judge/review.js';
 import { cachedModel, getSettings, loadModel, putSettings } from '../../engine/hive-judge/store.js';
@@ -22,7 +22,7 @@ export default async function routes(app: FastifyInstance) {
     const m = cachedModel() ?? await loadModel().catch(() => null);
     const s = await getSettings();
     return {
-      available: true, tiers: { deterministic: true, localScorer: true, localLlm: llmConfigured() && s.llmEnabled, adminReview: s.reviewEnabled },
+      available: true, training: isTraining(), tiers: { deterministic: true, localScorer: true, localLlm: llmConfigured() && s.llmEnabled, adminReview: s.reviewEnabled },
       model: m ? { version: m.version, trainedAt: m.trainedAt, answers: (m.data as { answers?: number }).answers ?? null } : null,
       llmModel: llmConfigured() ? llmModelName() : null,
     };
@@ -37,11 +37,22 @@ export default async function routes(app: FastifyInstance) {
     return v;
   });
 
-  app.post('/train', async (req) => {
+  // Training runs in the background: the request returns at once (202) so proxies/timeouts can't kill it;
+  // the admin page polls GET /hive-judge/status until the model version changes. ?wait=true keeps the old behaviour.
+  app.post('/train', async (req, reply) => {
     requireAdmin(req);
-    const m = await trainAndSave();
-    await audit({ action: 'admin.hive_judge.train', actorType: 'admin', targetType: 'system_setting', targetId: 'hive_judge_model', metadata: { version: m.version } }, req);
-    return { version: m.version, trainedAt: m.trainedAt, trainMs: m.trainMs, data: m.data };
+    const wait = (req.query as { wait?: string } | undefined)?.wait === 'true';
+    const run = trainAndSave().then(async (m) => {
+      await audit({ action: 'admin.hive_judge.train', actorType: 'admin', targetType: 'system_setting', targetId: 'hive_judge_model', metadata: { version: m.version } }, req).catch(() => undefined);
+      return m;
+    });
+    if (wait) {
+      const m = await run;
+      return { version: m.version, trainedAt: m.trainedAt, trainMs: m.trainMs, data: m.data };
+    }
+    run.catch((e) => req.log.error({ err: e }, 'hive judge training failed'));
+    reply.code(202);
+    return { started: true, training: true, message: 'Training started in the background. The model version updates when it finishes (usually under a minute).' };
   });
 
   app.get('/metrics', async (req) => {

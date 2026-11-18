@@ -17,6 +17,13 @@ export type HiveJudgeInput = JudgeInput & {
 };
 
 let training: Promise<HiveModel> | null = null;
+/**
+ * Lexicon corpus cap. The corpus only supplies idf + domain vocabulary, so a sample is enough; loading the whole
+ * bank (~7,600 template questions) exhausted memory on small production instances (Render 512 MB) and crashed the API.
+ */
+const CORPUS_LIMIT = Number(process.env.HIVE_JUDGE_CORPUS_LIMIT ?? 2500);
+/** True while a training run is in progress (used by the async train endpoint). */
+export function isTraining() { return training !== null; }
 
 /** Train (seed + DB calibration answers, DB bank as lexicon corpus) and persist a new model version. */
 export function trainAndSave(opts: { seed?: number } = {}): Promise<HiveModel> {
@@ -25,7 +32,7 @@ export function trainAndSave(opts: { seed?: number } = {}): Promise<HiveModel> {
       const seed = loadSeed();
       let dbEx: CalExample[] = [];
       let corpus = seed.items;
-      try { dbEx = await loadCalibrationExamples(); corpus = [...seed.items, ...(await loadCorpus())]; } catch { /* db unavailable → seed only */ }
+      try { dbEx = await loadCalibrationExamples(); corpus = [...seed.items, ...(await loadCorpus(CORPUS_LIMIT))]; } catch { /* db unavailable → seed only */ }
       const prev = cachedModel() ?? await loadModel().catch(() => null);
       const { model } = trainHiveJudge([...seed.examples, ...dbEx], { seed: opts.seed, corpus, version: (prev?.version ?? 0) + 1 });
       await saveModel(model).catch(() => undefined);
