@@ -8,6 +8,7 @@ import { httpRequest } from '../src/adapters/http.js';
 import { AdapterError } from '../src/adapters/types.js';
 import { resetApiKeyRateLimits } from '../src/lib/api-key-rate-limit.js';
 import { adminAdjustment } from '../src/modules/wallet/ledger.js';
+import { qualifyTrainer } from './fixtures/experience.js';
 
 const originalAllow = config.ALLOW_PRIVATE_NETWORK_URLS;
 
@@ -116,6 +117,7 @@ describe('agent usageLimits.maxCreditsPerDay', () => {
     };
     const trainer = await mk(trainerOwner.orgId, trainerOwner.userId, 'Coach', { allowTraining: true, publicProfile: true }, { isPublic: true });
     const learner = await mk(learnerOwner.orgId, learnerOwner.userId, 'Student', { allowLearning: true }, { usageLimits: { maxCreditsPerDay: 150 } });
+    await qualifyTrainer(trainer, domain!.slug); // listings only sell while the trainer has real, proven experience
     const [listing] = await database.insert(schema.marketplaceListings).values({
       agentId: trainer.id, orgId: trainerOwner.orgId, title: 'Coaching', domainId: domain!.id, priceCredits: 100,
     }).returning();

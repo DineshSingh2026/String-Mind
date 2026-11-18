@@ -1330,3 +1330,115 @@ export const agentCertifications = pgTable('agent_certifications', {
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex('agent_cert_uq').on(t.agentId, t.domainSlug)]);
+
+/* ───────────────────────────── Experience Ledger ("the agent's mind") ───────────────────────────── */
+
+/**
+ * One real piece of an agent's working history: the situation it faced, what it decided, why, and what happened.
+ * This — not the underlying model — is what makes an agent valuable. Experience records feed:
+ *   - the agent's own context on every call (RAG over its mind),
+ *   - the Experience Score (track record + replay),
+ *   - training: a trainer teaches from its cases and the learner is tested on the trainer's held-back cases.
+ * `witnessed` = Hive Mind recorded the decision BEFORE its outcome was reported (cannot be cherry-picked afterwards).
+ * Content is untrusted text written by the agent/owner; it is always shown to models as reference data.
+ */
+export const agentExperiences = pgTable('agent_experiences', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  domainId: uuid('domain_id').references(() => capabilityDomains.id),
+  situation: text('situation').notNull(),
+  action: text('action').notNull(),
+  reasoning: text('reasoning').notNull().default(''),
+  outcome: text('outcome').notNull().default(''),
+  /** what to do next time — required for a failed case to be usable as a test */
+  lesson: text('lesson').notNull().default(''),
+  /** 'pending' (outcome not known yet) | 'success' | 'failure' | 'mixed' */
+  result: text('result').notNull().default('pending'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  outcomeRecordedAt: timestamp('outcome_recorded_at', { withTimezone: true }),
+  /** 'agent' (agent API) | 'owner' (app) | 'import' (bulk history import) */
+  source: text('source').notNull(),
+  evidenceUrl: text('evidence_url'),
+  tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  witnessed: boolean('witnessed').notNull().default(false),
+  /** sha256 of the normalised situation+action+occurredAt — duplicate guard per agent */
+  checksum: text('checksum').notNull(),
+  embedding: vector('embedding').notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex('agent_experiences_checksum_uq').on(t.agentId, t.checksum),
+  index('agent_experiences_agent_idx').on(t.agentId, t.domainId, t.occurredAt),
+]);
+
+/** Experience Score per agent per domain ('general' for records without a domain). Derived; always recomputable. */
+export const agentExperienceScores = pgTable('agent_experience_scores', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  domainSlug: text('domain_slug').notNull(),
+  score: real('score').notNull(),
+  totalCount: integer('total_count').notNull().default(0),
+  resolvedCount: integer('resolved_count').notNull().default(0),
+  witnessedCount: integer('witnessed_count').notNull().default(0),
+  successRate: real('success_rate'),
+  spanDays: integer('span_days').notNull().default(0),
+  firstAt: timestamp('first_at', { withTimezone: true }),
+  lastAt: timestamp('last_at', { withTimezone: true }),
+  replayScore: real('replay_score'),
+  replayId: uuid('replay_id'),
+  replayAt: timestamp('replay_at', { withTimezone: true }),
+  /** may list training in this domain (see engine/experience/score.ts QUALIFY) */
+  qualified: boolean('qualified').notNull().default(false),
+  components: jsonb('components').$type<Record<string, number>>().notNull().default({}),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('agent_experience_scores_uq').on(t.agentId, t.domainSlug)]);
+
+/**
+ * Replay evaluation: the subject agent is shown real situations from the source agent's experience (its own for a
+ * self replay, the trainer's for training) with the recorded decision/outcome hidden, and graded against what
+ * actually worked. Tested cases are excluded from the subject's retrieved context during the test.
+ */
+export const experienceReplays = pgTable('experience_replays', {
+  id: id(),
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organisations.id, { onDelete: 'cascade' }),
+  sourceAgentId: uuid('source_agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  domainSlug: text('domain_slug').notNull(),
+  /** 'self' | 'pre_training' | 'post_training' | 'retention' */
+  purpose: text('purpose').notNull().default('self'),
+  trainingSessionId: uuid('training_session_id'),
+  requestedBy: uuid('requested_by').references(() => users.id),
+  /** 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' */
+  status: text('status').notNull().default('queued'),
+  /** 'sync' (agent called directly) | 'async' (prompt agent answers from its task inbox) */
+  mode: text('mode').notNull().default('sync'),
+  score: real('score'),
+  itemsTotal: integer('items_total').notNull().default(0),
+  itemsGraded: integer('items_graded').notNull().default(0),
+  method: text('method'),
+  summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default({}),
+  error: text('error'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [index('experience_replays_agent_idx').on(t.agentId, t.createdAt)]);
+
+export const experienceReplayItems = pgTable('experience_replay_items', {
+  id: id(),
+  replayId: uuid('replay_id').notNull().references(() => experienceReplays.id, { onDelete: 'cascade' }),
+  experienceId: uuid('experience_id').references(() => agentExperiences.id, { onDelete: 'set null' }),
+  ordinal: integer('ordinal').notNull(),
+  prompt: text('prompt').notNull(),
+  /** hidden reference (what worked / the lesson) — never sent to the subject agent */
+  expected: text('expected').notNull(),
+  /** the recorded action of a failed case: repeating it is penalised */
+  avoid: text('avoid').notNull().default(''),
+  response: text('response'),
+  score: real('score'),
+  grade: jsonb('grade').$type<Record<string, unknown>>().notNull().default({}),
+  /** 'pending' | 'answered' | 'graded' | 'expired' */
+  status: text('status').notNull().default('pending'),
+  taskId: uuid('task_id'),
+  gradedAt: timestamp('graded_at', { withTimezone: true }),
+}, (t) => [index('experience_replay_items_replay_idx').on(t.replayId, t.ordinal)]);

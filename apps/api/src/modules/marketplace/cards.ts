@@ -51,6 +51,15 @@ export interface AgentCard {
   listings: { id: string; title: string; priceCredits: number; pricingModel: string; domainSlug: string }[];
   /** Active Hive Mind certifications (Professional Evaluation), e.g. "Certified Professional · Cybersecurity". */
   certifications: { domainSlug: string; domainName: string; level: string; score: number; expiresAt: Date | null }[];
+  /**
+   * Experience (the agent's own track record — see engine/experience/score.ts). null = no recorded experience.
+   * qualifiedDomains = domains where it may train others.
+   */
+  experience: {
+    score: number; resolvedCount: number; witnessedCount: number; spanDays: number; successRate: number | null; replayScore: number | null;
+    domains: { slug: string; name: string; score: number; resolvedCount: number; qualified: boolean }[];
+    qualifiedDomains: string[];
+  } | null;
   languages: string[]; verificationStatus: string; health: string; createdAt: Date;
 }
 
@@ -105,10 +114,18 @@ export async function loadActiveListings(agentIds: string[]) {
   return out;
 }
 
+export async function loadExperience(agentIds: string[]) {
+  const out = new Map<string, (typeof schema.agentExperienceScores.$inferSelect)[]>();
+  if (!agentIds.length) return out;
+  const rows = await db().select().from(schema.agentExperienceScores).where(inArray(schema.agentExperienceScores.agentId, agentIds));
+  for (const r of rows) out.set(r.agentId, [...(out.get(r.agentId) ?? []), r]);
+  return out;
+}
+
 /** Build public agent cards (marketplace shape) for the given agent rows, preserving order. */
 export async function buildCards(agents: AgentRow[]): Promise<{ cards: AgentCard[]; ctx: CardContext }> {
   const ids = agents.map((a) => a.id);
-  const [caps, rep, listings, certRows] = await Promise.all([loadCapabilities(ids), loadReputation(ids), loadActiveListings(ids), activeCertifications(ids)]);
+  const [caps, rep, listings, certRows, exp] = await Promise.all([loadCapabilities(ids), loadReputation(ids), loadActiveListings(ids), activeCertifications(ids), loadExperience(ids)]);
   const providerIds = [...new Set(agents.map((a) => a.providerId))];
   const orgIds = [...new Set(agents.map((a) => a.orgId))];
   const [providers, orgs, domains] = await Promise.all([
@@ -123,6 +140,9 @@ export async function buildCards(agents: AgentRow[]): Promise<{ cards: AgentCard
     const c = caps.get(a.id) ?? [];
     const r = rep.get(a.id);
     const p = pMap.get(a.providerId);
+    const xs = exp.get(a.id) ?? [];
+    const all = xs.find((x) => x.domainSlug === 'all');
+    const domainRows = xs.filter((x) => x.domainSlug !== 'all' && x.domainSlug !== 'general').sort((x, y) => y.score - x.score);
     return {
       id: a.id, slug: a.slug, name: a.name, avatar: a.avatar, description: a.description,
       provider: p ? { slug: p.slug, name: p.name } : null, modelName: a.modelName,
@@ -135,6 +155,11 @@ export async function buildCards(agents: AgentRow[]): Promise<{ cards: AgentCard
       listings: listings.get(a.id) ?? [],
       certifications: certRows.filter((x) => x.agentId === a.id).sort((x, y) => y.score - x.score)
         .map((x) => ({ domainSlug: x.domainSlug, domainName: dMap.get(x.domainSlug) ?? x.domainSlug, level: x.level, score: x.score, expiresAt: x.expiresAt })),
+      experience: all && all.totalCount > 0 ? {
+        score: all.score, resolvedCount: all.resolvedCount, witnessedCount: all.witnessedCount, spanDays: all.spanDays, successRate: all.successRate, replayScore: all.replayScore,
+        domains: domainRows.map((x) => ({ slug: x.domainSlug, name: dMap.get(x.domainSlug) ?? x.domainSlug, score: x.score, resolvedCount: x.resolvedCount, qualified: x.qualified })),
+        qualifiedDomains: domainRows.filter((x) => x.qualified).map((x) => x.domainSlug),
+      } : null,
       languages: a.languages, verificationStatus: a.verificationStatus, health: a.health, createdAt: a.createdAt,
     };
   });

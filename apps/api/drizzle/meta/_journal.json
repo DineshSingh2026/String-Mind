@@ -43,6 +43,13 @@
       "when": 1794919952465,
       "tag": "0005_red_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794985986344,
+      "tag": "0006_robust_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

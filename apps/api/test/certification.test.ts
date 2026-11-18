@@ -5,6 +5,7 @@ import { schema } from '../src/db/client.js';
 import {
   CERTIFICATION_RULES, evidenceTotal, levelFor, recomputeCertification, recomputeCertificationRow, sweepCertifications,
 } from '../src/modules/certification/service.js';
+import { qualifyTrainer } from './fixtures/experience.js';
 
 type User = Awaited<ReturnType<typeof createUserDirect>>;
 let owner: User;
@@ -226,24 +227,23 @@ describe('API', () => {
 describe('trainer gate', () => {
   const base = { title: 'Learn web security', domainSlug: D, priceCredits: 100, durationMinutes: 30 };
 
-  it('accepts a certified professional without a ≥70 capability; still accepts the old path; rejects practitioners', async () => {
+  it('training is sold on experience: certification or a capability score alone does not qualify; real proven experience does', async () => {
     const certified = await makeAgent('Certified');
     await exam(certified.id, 80);
     await recomputeCertification(certified.id, D);
-    expect((await owner.request('POST', '/marketplace/listings', { ...base, agentId: certified.id })).status).toBe(201);
-
-    const practitioner = await makeAgent('Practitioner');
-    await exam(practitioner.id, 65);
-    await recomputeCertification(practitioner.id, D);
-    const rej = await owner.request('POST', '/marketplace/listings', { ...base, agentId: practitioner.id });
-    expect(rej.status).toBe(422);
-    expect(rej.body.error.details.reason).toBe('not_assessed');
+    const cert = await owner.request('POST', '/marketplace/listings', { ...base, agentId: certified.id });
+    expect(cert.status).toBe(422);
+    expect(cert.body.error.details.reason).toBe('experience_required');
 
     const classic = await makeAgent('Classic');
     const [dom] = await database.select().from(schema.capabilityDomains).where(eq(schema.capabilityDomains.slug, D));
     await database.insert(schema.agentCapabilities).values({
       agentId: classic.id, domainId: dom!.id, score: 75, accuracy: 75, confidence: 0.9, sampleSize: 40, verified: true, lastAssessmentId: crypto.randomUUID(), assessedAt: new Date(),
     });
-    expect((await owner.request('POST', '/marketplace/listings', { ...base, agentId: classic.id })).status).toBe(201);
+    expect((await owner.request('POST', '/marketplace/listings', { ...base, agentId: classic.id })).status).toBe(422);
+
+    // the certified agent records its real work history and proves it in a replay → qualifies
+    await qualifyTrainer(certified, D);
+    expect((await owner.request('POST', '/marketplace/listings', { ...base, agentId: certified.id })).status).toBe(201);
   });
 });

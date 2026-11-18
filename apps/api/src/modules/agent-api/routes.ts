@@ -24,6 +24,9 @@ import { handleAsyncTaskAnswer } from '../../engine/assessment.js';
 import { ensureHealthCheckScheduled } from '../agents/service.js';
 import { consumeAgentTokenRequest } from '../../lib/agent-rate-limit.js';
 import { recordVerdict } from '../hive-learning/verdicts.js';
+import { addExperiences, listExperiences, recordOutcome } from '../../engine/experience/ledger.js';
+import { recomputeExperienceScores } from '../../engine/experience/score.js';
+import { buildAgentContext } from '../../engine/context.js';
 
 type Agent = typeof schema.agents.$inferSelect;
 type Connection = typeof schema.agentConnections.$inferSelect;
@@ -360,6 +363,51 @@ export default async function routes(app: FastifyInstance) {
       note: z.string().max(1000).default(''),
     }), req.body);
     return recordVerdict({ orgId: agent.orgId, userId: agent.ownerId, agentId: agent.id, ...body });
+  });
+
+  /* ───────────── the agent's mind: Experience Ledger ───────────── */
+
+  /**
+   * Record real work: { situation, action, reasoning?, outcome?, lesson?, result?, occurredAt?, domain?, tags?, evidenceUrl? }
+   * or { experiences: [...] } (max 500). Log decisions as they happen with result "pending" and report the outcome later
+   * via POST /experiences/:id/outcome — those become "witnessed" experience, the strongest kind.
+   */
+  app.post('/experiences', { bodyLimit: 2 * 1024 * 1024 }, async (req, reply) => {
+    const { agent } = req.agentCtx!;
+    const body = req.body as { experiences?: unknown } | null;
+    const items = Array.isArray(body?.experiences) ? (body!.experiences as unknown[]) : [body];
+    const r = await addExperiences(agent, items, 'agent');
+    await recomputeExperienceScores(agent.id);
+    return reply.status(r.created.length ? 201 : 200).send({
+      created: r.created.map((e) => ({ id: e.id, result: e.result, occurredAt: e.occurredAt })),
+      duplicates: r.duplicates, rejected: r.rejected, flagged: r.flagged,
+    });
+  });
+
+  app.get('/experiences', async (req) => {
+    const { agent } = req.agentCtx!;
+    const q = parse(z.object({
+      result: z.enum(['pending', 'success', 'failure', 'mixed']).optional(), domain: z.string().max(64).optional(), q: z.string().max(200).optional(),
+      page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(50),
+    }), req.query);
+    return listExperiences(agent.id, q);
+  });
+
+  /** { result: success|failure|mixed, outcome, lesson?, evidenceUrl? } */
+  app.post('/experiences/:id/outcome', async (req) => {
+    const { agent } = req.agentCtx!;
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const e = await recordOutcome(agent.id, id, req.body);
+    await recomputeExperienceScores(agent.id);
+    return { id: e.id, result: e.result, witnessed: e.witnessed };
+  });
+
+  /** Search your own mind on Hive Mind: your past experience, memories (incl. cases learned from trainers) and knowledge. */
+  app.get('/mind', async (req) => {
+    const { agent } = req.agentCtx!;
+    const q = parse(z.object({ q: z.string().trim().min(2).max(2000), limit: z.coerce.number().int().min(1).max(20).default(8) }), req.query);
+    const ctx = await buildAgentContext(agent.id, q.q, { limit: q.limit });
+    return { query: q.q, items: ctx.items.map((i, n) => ({ ref: n + 1, kind: i.kind, id: i.id, title: i.title ?? null, content: i.content, score: Math.round(i.score * 1000) / 1000 })) };
   });
 
   app.get('/me', async (req) => {

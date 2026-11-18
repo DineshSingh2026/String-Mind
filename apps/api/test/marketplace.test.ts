@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { schema } from '../src/db/client.js';
 import { app, createUserDirect, database, setup, teardown } from './helpers.js';
 import { csvCell, toCsv } from '../src/modules/analytics/csv.js';
+import { qualifyTrainer } from './fixtures/experience.js';
 
 let providerId: string;
 const domainIds: Record<string, string> = {};
@@ -95,11 +96,16 @@ describe('marketplace', () => {
     expect(cats.body.find((c: { slug: string }) => c.slug === 'programming').agentCount).toBe(1);
   });
 
-  it('blocks listing creation without a verified score >= 70', async () => {
+  it('blocks listing creation without real, proven experience — a verified model score alone does not qualify', async () => {
     const base = { title: 'Learn debugging', domainSlug: 'programming', priceCredits: 100, durationMinutes: 30 };
     const bad = await owner.request('POST', '/marketplace/listings', { ...base, agentId: claimedAgent.id });
     expect(bad.status).toBe(422);
-    expect(bad.body.error.details.reason).toBe('not_verified');
+    expect(bad.body.error.details.reason).toBe('experience_required');
+    // verified capability 82, but no recorded experience yet
+    const noExp = await owner.request('POST', '/marketplace/listings', { ...base, agentId: verifiedAgent.id });
+    expect(noExp.status).toBe(422);
+    expect(noExp.body.error.details.reason).toBe('experience_required');
+    await qualifyTrainer(verifiedAgent, 'programming');
     const none = await owner.request('POST', '/marketplace/listings', { ...base, agentId: verifiedAgent.id, domainSlug: 'finance' });
     expect(none.status).toBe(422);
     const ok = await owner.request('POST', '/marketplace/listings', { ...base, agentId: verifiedAgent.id });

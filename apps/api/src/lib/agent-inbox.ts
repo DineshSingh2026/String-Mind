@@ -173,7 +173,7 @@ export function cleanText(s: string, max: number): string {
   return s.replace(/\u0000/g, '').slice(0, max);
 }
 
-export type TaskKind = 'verify' | 'assessment' | 'training' | 'playground' | 'health' | 'debate' | 'pro_exam' | 'live_check';
+export type TaskKind = 'verify' | 'assessment' | 'training' | 'playground' | 'health' | 'debate' | 'pro_exam' | 'live_check' | 'experience_replay';
 
 /**
  * Answer handlers for async task kinds owned by feature modules (e.g. 'pro_exam', 'live_check').

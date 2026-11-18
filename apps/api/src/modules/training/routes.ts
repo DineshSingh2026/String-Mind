@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, count, desc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
+import { trainerQualification } from '../../engine/experience/score.js';
 import { db, schema } from '../../db/client.js';
 import { requirePerm } from '../../lib/auth.js';
 import { audit } from '../../lib/audit.js';
@@ -183,6 +184,9 @@ export default async function routes(app: FastifyInstance) {
       const [l] = await db().select().from(schema.marketplaceListings).where(eq(schema.marketplaceListings.id, body.listingId)).limit(1);
       if (!l || l.agentId !== trainer.id || l.status !== 'active' || l.moderation === 'hidden') throw notFound('Listing');
       if (l.domainId !== domain.id) throw badRequest('Listing is for a different domain');
+      // Training is sold on the trainer's real experience: a listing only sells while the trainer still qualifies.
+      const q = await trainerQualification(trainer.id, domain.slug);
+      if (!q.qualified) throw unprocessable(`${trainer.name} does not currently meet the experience requirement to train in ${domain.name}: ${q.missing.join(' ')}`, { reason: 'trainer_not_qualified', missing: q.missing });
       price = l.pricingModel === 'free' ? 0 : l.priceCredits;
     } else if (trainer.orgId !== a.orgId) {
       throw badRequest('listingId is required to train with an agent from another organisation');

@@ -14,7 +14,7 @@ import { PageQuery, offset, parse } from '../../lib/http.js';
 import { notifyOrg } from '../../lib/notify.js';
 import { getOwnedAgent } from '../../lib/tenancy.js';
 import { recomputeReputation } from '../reputation/service.js';
-import { hasTrainerCertification } from '../certification/service.js';
+import { QUALIFY, trainerQualification } from '../../engine/experience/score.js';
 import { buildCards, isPubliclyVisible, publicAgentWhere, round1, selectPublicAgents, verifiedScore, type AgentCard, type AgentRow } from './cards.js';
 
 export const MIN_LISTING_SCORE = 70;
@@ -29,7 +29,7 @@ const SearchQuery = PageQuery.extend({
   maxPrice: z.coerce.number().int().min(0).optional(),
   free: z.enum(['true', 'false']).optional(),
   verified: z.enum(['true', 'false']).optional(),
-  sort: z.enum(['popular', 'score', 'price_asc', 'price_desc', 'rating', 'newest']).default('popular'),
+  sort: z.enum(['popular', 'experience', 'score', 'price_asc', 'price_desc', 'rating', 'newest']).default('popular'),
 });
 
 const ListingBody = z.object({
@@ -54,25 +54,24 @@ async function domainBySlug(slug: string) {
   return d ?? null;
 }
 
-/** Throws 422 with an explanation unless the agent may list training in this domain. */
-async function assertCanList(agent: AgentRow, domainId: string, domainSlug: string) {
+/**
+ * Throws 422 with an explanation unless the agent may list training in this domain.
+ *
+ * Training is sold on EXPERIENCE: the agent must have a real, recorded track record in the domain and prove in an
+ * experience replay that it can apply it (engine/experience/score.ts QUALIFY). A strong model alone — a high
+ * benchmark score or an exam certification — does not qualify, because what the learner pays for is the trainer's
+ * past experience, not its model.
+ */
+async function assertCanList(agent: AgentRow, _domainId: string, domainSlug: string) {
   if (agent.status === 'suspended') throw unprocessable('This agent is suspended and cannot publish listings.');
   if ((agent.permissions as { allowTraining?: boolean }).allowTraining !== true) {
     throw unprocessable('Training is not enabled for this agent. Turn on "Allow training (be a trainer)" in the agent permissions first.', { reason: 'allow_training_disabled' });
   }
-  const [cap] = await db().select().from(schema.agentCapabilities)
-    .where(and(eq(schema.agentCapabilities.agentId, agent.id), eq(schema.agentCapabilities.domainId, domainId))).limit(1);
-  if (!cap || !cap.verified || cap.score < MIN_LISTING_SCORE) {
-    // Certification path (Professional Evaluation): an active, unexpired certification at 'professional' or above in
-    // this domain also qualifies the agent as a trainer, even without a verified capability score ≥ 70.
-    if (await hasTrainerCertification(agent.id, domainSlug)) return;
+  const q = await trainerQualification(agent.id, domainSlug);
+  if (!q.qualified) {
     throw unprocessable(
-      `A verified capability score of at least ${MIN_LISTING_SCORE} in "${domainSlug}" is required to offer training. ` +
-      (!cap ? 'This agent has not been assessed in this domain yet — run an assessment first.'
-        : !cap.verified ? `The current score (${round1(cap.score)}) is not verified yet (needs a larger sample / higher confidence). Run a fuller assessment.`
-        : `The current verified score is ${round1(cap.score)}.`) +
-      ' Alternatively, an active Professional (or Expert) certification in this domain qualifies.',
-      { reason: !cap ? 'not_assessed' : !cap.verified ? 'not_verified' : 'score_below_threshold', required: MIN_LISTING_SCORE, score: cap ? round1(cap.score) : null, verified: cap?.verified ?? false },
+      `To offer training in "${domainSlug}" an agent needs real, recorded experience in it — a strong model alone does not qualify. Missing: ${q.missing.join(' ')}`,
+      { reason: 'experience_required', missing: q.missing, experienceScore: q.score, requirements: QUALIFY },
     );
   }
 }
@@ -99,6 +98,7 @@ function sortCards(cards: (AgentCard & { _score: number | null; _minPrice: numbe
   const cmp: Record<string, (a: typeof cards[number], b: typeof cards[number]) => number> = {
     popular: (a, b) => b.sessionsCompleted - a.sessionsCompleted || b.reputationScore - a.reputationScore || tie(a, b),
     score: (a, b) => nullsLast(a._score, b._score, -1) || b.reputationScore - a.reputationScore || tie(a, b),
+    experience: (a, b) => nullsLast(a.experience?.score ?? null, b.experience?.score ?? null, -1) || b.sessionsCompleted - a.sessionsCompleted || tie(a, b),
     price_asc: (a, b) => nullsLast(a._minPrice, b._minPrice, 1) || tie(a, b),
     price_desc: (a, b) => nullsLast(a._minPrice, b._minPrice, -1) || tie(a, b),
     rating: (a, b) => nullsLast(a.rating, b.rating, -1) || b.ratingCount - a.ratingCount || tie(a, b),

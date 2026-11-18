@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { TrainerListingCard } from '@/components/app/TrainerListingCard';
+import { ExperienceTab } from '@/components/app/ExperienceTab';
 import { CertificationSummary } from '@/components/evaluation/CertificationSummary';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -21,9 +22,9 @@ import {
 } from '@/components/app/primitives';
 import { claimedSlugs, listOf, type Agent, type AgentPermissions, type LearningRecord, type Paged, type Scorecard } from '@/components/app/types';
 
-type TabKey = 'overview' | 'activity' | 'scorecard' | 'knowledge' | 'learning' | 'training' | 'earnings' | 'permissions' | 'limits' | 'config' | 'versions' | 'playground';
+type TabKey = 'overview' | 'experience' | 'activity' | 'scorecard' | 'knowledge' | 'learning' | 'training' | 'earnings' | 'permissions' | 'limits' | 'config' | 'versions' | 'playground';
 const TABS: { value: TabKey; label: string }[] = [
-  { value: 'overview', label: 'Overview' }, { value: 'activity', label: 'Activity' }, { value: 'scorecard', label: 'Capability scorecard' }, { value: 'knowledge', label: 'Knowledge sources' },
+  { value: 'overview', label: 'Overview' }, { value: 'experience', label: 'Experience (mind)' }, { value: 'activity', label: 'Activity' }, { value: 'scorecard', label: 'Capability scorecard' }, { value: 'knowledge', label: 'Knowledge sources' },
   { value: 'learning', label: 'Learning history' }, { value: 'training', label: 'Training history' }, { value: 'earnings', label: 'Earnings' },
   { value: 'permissions', label: 'Permissions' }, { value: 'limits', label: 'Usage limits' }, { value: 'config', label: 'Configuration' },
   { value: 'versions', label: 'Version history' }, { value: 'playground', label: 'Playground' },
@@ -123,6 +124,7 @@ export default function AgentDetailPage() {
             {isPromptAgent(agent) && <KeepOnline />}
           </div>
         )}
+        {tab === 'experience' && <ExperienceTab id={id} canWrite={can('agents.update')} />}
         {tab === 'activity' && <ActivityTab id={id} />}
         {tab === 'scorecard' && <ScorecardTab id={id} canAssess={can('assessments.run')} onAssess={assess} />}
         {tab === 'knowledge' && <KnowledgeTab id={id} canWrite={can('knowledge.write')} />}

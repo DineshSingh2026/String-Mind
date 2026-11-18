@@ -22,7 +22,7 @@ export const SANDBOX_REFUSAL = "I can't help with that request. It could cause s
 /** Extract numbered knowledge items from the injected system context. */
 export function parseContextItems(system: string | undefined): string[] {
   if (!system) return [];
-  const idx = system.indexOf('Relevant knowledge available to you');
+  const idx = system.indexOf('Relevant knowledge available to you');  // prefix; context.ts may append ", including your own past experience"
   if (idx < 0) return [];
   const body = system.slice(idx).split('\n').slice(1);
   const items: string[] = [];
@@ -245,6 +245,66 @@ function pickChoice(sentence: string, stem: string, choices: { letter: string; t
   return best.letter;
 }
 
+/* ───────────── built-in skill: recall a similar past case (experience) ───────────── */
+
+const REPLAY_CUE = /\bwhat do you decide\b/i;
+const field = (item: string, name: string) => new RegExp(`(?:^|\\n)${name}:\\s*(.+)`, 'i').exec(item)?.[1]?.trim() ?? '';
+
+/**
+ * Experience skill: for a decision question ("Situation: … What do you decide …"), find the most similar past case
+ * among the injected context items (own experience or cases learned from a trainer) and reuse what worked — or the
+ * lesson, when that case failed. No similar case → null (the sandbox then abstains). It never invents a decision.
+ */
+export function recallCase(situation: string, items: string[]): string | null {
+  const sv = embed(situation);
+  let best: { i: number; sim: number; item: string } | null = null;
+  items.forEach((item, i) => {
+    const s = field(item, 'Situation');
+    if (!s || !field(item, 'Decision')) return;
+    const sim = cosine(sv, embed(s));
+    if (!best || sim > best.sim) best = { i, sim, item };
+  });
+  const b = best as { i: number; sim: number; item: string } | null;
+  if (!b || b.sim < 0.2) return null;
+  const result = /result:\s*(\w+)/i.exec(b.item)?.[1]?.toLowerCase() ?? '';
+  const decision = field(b.item, 'Decision');
+  const lesson = field(b.item, 'Lesson');
+  const ref = `[${b.i + 1}]`;
+  if (result === 'failure') return lesson ? `${lesson} I would not repeat "${decision}" — it failed in my past case ${ref}.` : null;
+  return `${decision}${lesson ? ` ${lesson}` : ''} This is what worked in my past case ${ref}.`;
+}
+
+const TEACH_EXPERIENCE_CUE = /\bteach from your own recorded experience\b/i;
+const EXPLAIN_CASE_CUE = /\bthis exercise was one of your real cases\b/i;
+
+/** One recorded case as a teaching line (only what the record says). */
+function caseLine(c: string): string {
+  const result = /result:\s*(\w+)/i.exec(c)?.[1] ?? '';
+  const happened = field(c, 'What happened');
+  const lesson = field(c, 'Lesson');
+  return `${field(c, 'Situation')} I decided: ${field(c, 'Decision')}${happened ? ` What happened: ${happened}` : ''}${result ? ` (${result})` : ''}${lesson ? ` Lesson: ${lesson}` : ''}`;
+}
+
+/**
+ * Experience teaching: report the trainer's own recorded cases (given in the request or in its context) faithfully,
+ * one per distinct lesson. It never invents a case; with no recorded case it returns null (→ abstain).
+ */
+export function teachFromCases(user: string, items: string[]): string | null {
+  const block = user.split(/Your recorded cases for this topic:/i)[1] ?? '';
+  const fromUser = block.split(/\n\s*\n(?=\(\d+\)\s)/).map((b) => b.replace(/^\s*\(\d+\)\s*/, '').trim()).filter(Boolean);
+  const cases = [...fromUser, ...items].filter((c) => field(c, 'Situation') && field(c, 'Decision'));
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const c of cases) {
+    const key = field(c, 'Lesson') || field(c, 'Decision');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`- ${caseLine(c)}`);
+    if (lines.length >= 4) break;
+  }
+  return lines.length ? `From my own recorded experience:\n${lines.join('\n')}` : null;
+}
+
 const TEACH_CUE = /\b(teach|share|summari[sz]e|key (facts|points|concepts|ideas)|overview|lesson|walk me through|what should i know|everything you know|list the (main|key))\b/i;
 
 /** Pure, deterministic sandbox reasoning step (exported for tests). */
@@ -266,6 +326,20 @@ export function sandboxRespond(req: InvokeRequest, persona?: string): string {
 
   const arith = tryArithmetic(q.stem);
   if (arith !== null && !q.choices.length) return formatNumber(arith);
+
+  if (TEACH_EXPERIENCE_CUE.test(user)) {
+    const taught = teachFromCases(user, items);
+    return taught ? style(taught) : SANDBOX_ABSTAIN;
+  }
+  if (EXPLAIN_CASE_CUE.test(user) && field(user, 'Decision')) {
+    return style(`In that case: ${caseLine(user)}`);
+  }
+
+  if (REPLAY_CUE.test(user)) {
+    const sit = /Situation:\s*([\s\S]*?)(?:\n\s*\n|What do you decide)/i.exec(user)?.[1] ?? q.stem;
+    const recalled = recallCase(sit, items);
+    return recalled ? style(recalled) : SANDBOX_ABSTAIN;
+  }
 
   const ranked = rankSentences(q.stem, items);
   const qLen = tokenize(q.stem).filter((t) => !GENERIC.has(t)).length;

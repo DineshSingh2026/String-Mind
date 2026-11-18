@@ -10,7 +10,7 @@
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/client.js';
 import { decrypt } from '../lib/crypto.js';
-import { buildAgentContext, type AgentContext } from '../engine/context.js';
+import { buildAgentContext, type AgentContext, type ContextOptions } from '../engine/context.js';
 import { createRuntime } from './factory.js';
 import { DEFAULT_TIMEOUT_MS, lastUserMessage } from './http.js';
 import { tryConsumeCall } from './usage.js';
@@ -48,20 +48,24 @@ export async function getRuntime(agentId: string): Promise<AgentRuntime> {
 
 type AgentRow = typeof schema.agents.$inferSelect;
 
+export interface InvokeContextOptions extends Pick<ContextOptions, 'sessionId' | 'excludeExperienceIds' | 'excludeMemoryIds'> {
+  withContext?: boolean; contextQuery?: string;
+}
+
 /**
  * The system prompt an agent receives for a call: its instructions, role, the request's own system text and the
  * retrieved knowledge context. Shared by invokeAgent and async (inbox) assessments so both see identical prompts.
  */
 export async function buildInvocationSystem(
   agent: Pick<AgentRow, 'id' | 'instructions' | 'role'>, req: Pick<InvokeRequest, 'messages' | 'system'>,
-  opts: { withContext?: boolean; contextQuery?: string; sessionId?: string } = {},
+  opts: InvokeContextOptions = {},
 ): Promise<{ system: string; context: AgentContext | null }> {
   let context: AgentContext | null = null;
   if (opts.withContext !== false) {
     const query = opts.contextQuery ?? lastUserMessage(req as InvokeRequest);
     if (query.trim()) {
       try {
-        context = await buildAgentContext(agent.id, query, { sessionId: opts.sessionId });
+        context = await buildAgentContext(agent.id, query, { sessionId: opts.sessionId, excludeExperienceIds: opts.excludeExperienceIds, excludeMemoryIds: opts.excludeMemoryIds });
       } catch (err) {
         // Context retrieval is an enhancement: degrade to no context rather than failing the call.
         console.error(`[adapters] context build failed for agent ${agent.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -79,7 +83,7 @@ export async function buildInvocationSystem(
 }
 
 export async function invokeAgent(
-  agentId: string, req: InvokeRequest, opts: { withContext?: boolean; contextQuery?: string; sessionId?: string } = {},
+  agentId: string, req: InvokeRequest, opts: InvokeContextOptions = {},
 ): Promise<InvokeResult & { context: AgentContext | null }> {
   const [agent] = await db().select().from(schema.agents).where(eq(schema.agents.id, agentId)).limit(1);
   if (!agent || agent.deletedAt) throw new AdapterError('Agent not found or deleted', 'config');

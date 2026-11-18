@@ -6,6 +6,7 @@ import { schema } from '../src/db/client.js';
 import { drain } from '../src/jobs/queue.js';
 import { heldOutPrompts, leakageCheck, sanitizeContent } from '../src/engine/training.js';
 import { adminAdjustment } from '../src/modules/wallet/ledger.js';
+import { qualifyTrainer } from './fixtures/experience.js';
 
 let domain: typeof schema.capabilityDomains.$inferSelect;
 let facts: string[] = [];
@@ -78,6 +79,8 @@ describe('end-to-end training session (sandbox agents)', () => {
     const dup = await learnerOwner.request('POST', `/knowledge/sources/${lsrc.body.id}/documents`, { title: 'Copy', text: facts.join('\n\n') });
     expect(dup.status).toBe(409);
 
+    // listings sell on proven experience (see experience.test.ts) — the trainer has a real recorded history
+    await qualifyTrainer(trainer, domain.slug);
     const [listing] = await database.insert(schema.marketplaceListings).values({
       agentId: trainer.id, orgId: trainerOwner.orgId, title: 'Tutoring', domainId: domain.id, priceCredits: 100,
     }).returning();
@@ -116,5 +119,26 @@ describe('end-to-end training session (sandbox agents)', () => {
     expect(msgs.body.items.length).toBeGreaterThan(5);
     const mem = await database.select().from(schema.agentMemories).where(and(eq(schema.agentMemories.agentId, learner.id)));
     expect(mem.length).toBeGreaterThan(0);
+    const [row] = await database.select().from(schema.trainingSessions).where(eq(schema.trainingSessions.id, sessionId));
+    expect((row!.plan as { mode?: string }).mode).toBe('experience');
+  });
+
+  it('an org training its own agent without recorded experience uses the benchmark flow', async () => {
+    const owner = await createUserDirect();
+    const trainer = await makeAgent(owner.orgId, owner.userId, 'InHouseTutor', { allowTraining: true, shareKnowledge: true });
+    const learner = await makeAgent(owner.orgId, owner.userId, 'InHousePupil', { allowLearning: true, autoApproveArtefacts: true, dataSharing: 'artefacts_only' });
+    const src = await owner.request('POST', '/knowledge/sources', { name: 'Pack', type: 'text', agentId: trainer.id, domainSlug: domain.slug });
+    expect((await owner.request('POST', `/knowledge/sources/${src.body.id}/documents`, { title: 'In-house pack', text: facts.slice().reverse().join('\n\n') })).status).toBe(201);
+    const r = await owner.request('POST', '/training/requests', { learnerAgentId: learner.id, trainerAgentId: trainer.id, domainSlug: domain.slug, objectives: [] });
+    expect(r.status).toBe(201);
+    const acc = await owner.request('POST', `/training/requests/${r.body.id}/accept`);
+    const sessionId = acc.body.session.id as string;
+    expect((await owner.request('POST', `/training/sessions/${sessionId}/start`)).status).toBe(200);
+    await drain();
+    const s = await owner.request('GET', `/training/sessions/${sessionId}`);
+    expect(s.body.status).toBe('completed');
+    expect(s.body.postScore).toBeGreaterThan(s.body.preScore);
+    const [row] = await database.select().from(schema.trainingSessions).where(eq(schema.trainingSessions.id, sessionId));
+    expect((row!.plan as { mode?: string }).mode).toBe('benchmark');
   });
 });
