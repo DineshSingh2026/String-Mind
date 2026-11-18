@@ -1,17 +1,61 @@
 'use client';
 /**
- * "List as a trainer" — lets an owner publish a training listing (price in IDLE, settlement terms) for a
- * certified / verified agent. Backed by POST /marketplace/listings (the server enforces eligibility:
- * verified score ≥ 70 OR an active Professional+ certification in that domain).
+ * "List as a trainer" — lets an owner publish a training listing (price in IDLE, settlement terms).
+ * Training is sold on EXPERIENCE: the card shows a live "Trainer readiness" checklist for the chosen domain
+ * (GET /experience/agents/:id/readiness) and blocks publishing until it is complete. The server enforces the same
+ * rules on POST /marketplace/listings.
  */
 import { useState } from 'react';
 import { GraduationCap } from 'lucide-react';
 import { DOMAINS } from '@aix/shared';
 import { Alert, Button, Card, CardBody, CardHeader, Field, Input, Select, Textarea, useToast } from '@/components/ui';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, useApi } from '@/lib/api';
 import { IdleToken } from '@/components/brand/IdleToken';
 
-export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: string; agentName: string; isPublic: boolean }) {
+interface Readiness { domain: string; qualified: boolean; missing: string[]; untaggedCount: number; checks: { key: string; label: string; ok: boolean; current: number | null; required: number }[] }
+
+function ReadinessChecklist({ agentId, domainSlug, onGoExperience }: { agentId: string; domainSlug: string; onGoExperience?: () => void }) {
+  const toast = useToast();
+  const { data, mutate } = useApi<Readiness>(`/experience/agents/${agentId}/readiness?domain=${encodeURIComponent(domainSlug)}`);
+  const [busy, setBusy] = useState(false);
+  if (!data) return null;
+  const tag = async () => {
+    setBusy(true);
+    try { const r = await api.post<{ tagged: number }>(`/experience/agents/${agentId}/records/tag-domain`, { domain: domainSlug }); toast('success', `${r.tagged} case(s) tagged to this domain`); await mutate(); }
+    catch (e) { toast('danger', errorMessage(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="sm:col-span-2 rounded-lg border border-white/10 p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold text-sm">Trainer readiness — {data.domain}</h4>
+        {data.qualified ? <span className="text-xs text-emerald-400">Ready to list</span> : <span className="text-xs text-amber-400">Not ready yet</span>}
+      </div>
+      <p className="text-xs text-muted">Training is sold on your agent’s real experience, not its model. A strong model alone does not qualify.</p>
+      <ul className="space-y-1 text-sm">
+        {data.checks.map((c) => (
+          <li key={c.key} className="flex gap-2">
+            <span className={c.ok ? 'text-emerald-400' : 'text-amber-400'}>{c.ok ? '✔' : '○'}</span>
+            <span>{c.label}: <b>{c.current == null ? 'not done' : Math.round(c.current * 10) / 10}</b> / {c.required}{c.key === 'replay' ? ' score' : ''}</span>
+          </li>
+        ))}
+      </ul>
+      {data.untaggedCount > 0 && (
+        <div className="text-xs text-muted flex flex-wrap items-center gap-2">
+          {data.untaggedCount} recorded case(s) have no domain, so they don’t count here.
+          <Button size="sm" variant="outline" loading={busy} onClick={tag}>Tag them as {data.domain}</Button>
+        </div>
+      )}
+      {!data.qualified && (
+        <div className="text-xs text-muted flex flex-wrap items-center gap-2">
+          Next: import this agent’s real past work for this domain, then run an experience replay.
+          {onGoExperience && <Button size="sm" variant="outline" onClick={onGoExperience}>Open Experience tab</Button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TrainerListingCard({ agentId, agentName, isPublic, onGoExperience }: { agentId: string; agentName: string; isPublic: boolean; onGoExperience?: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [domainSlug, setDomain] = useState('');
@@ -26,6 +70,8 @@ export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // same SWR key as the checklist: one request, shared result
+  const ready = useApi<Readiness>(domainSlug ? `/experience/agents/${agentId}/readiness?domain=${encodeURIComponent(domainSlug)}` : null);
 
   const commission = free ? 0 : Math.floor(price * 0.2);
   const submit = async () => {
@@ -52,7 +98,7 @@ export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: 
           <Button variant="primary" onClick={() => setOpen(true)}>Create a training listing</Button>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Domain" htmlFor="tl-domain" required hint="You must be verified (score ≥ 70) or certified Professional+ in it.">
+            <Field label="Domain" htmlFor="tl-domain" required hint="You need real, recorded experience in this domain (shown below once you choose it).">
               <Select id="tl-domain" value={domainSlug} onChange={(e) => setDomain(e.target.value)}>
                 <option value="">Choose a domain…</option>
                 {DOMAINS.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}
@@ -83,9 +129,10 @@ export function TrainerListingCard({ agentId, agentName, isPublic }: { agentId: 
               <Field label="Minimum improvement (points)" htmlFor="tl-min"><Input id="tl-min" type="number" min={0} max={100} value={minImprovement} onChange={(e) => setMinImp(Math.max(0, Number(e.target.value) || 0))} /></Field>
             )}
             <div className="sm:col-span-2"><Field label="What learners get" htmlFor="tl-desc"><Textarea id="tl-desc" rows={3} maxLength={5000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Topics covered, exercises, what the learner will be able to do afterwards." /></Field></div>
+            {domainSlug && <ReadinessChecklist key={`${domainSlug}-${done}`} agentId={agentId} domainSlug={domainSlug} onGoExperience={onGoExperience} />}
             {err && <div className="sm:col-span-2"><Alert tone="danger">{err}</Alert></div>}
             <div className="flex gap-2 sm:col-span-2">
-              <Button variant="primary" loading={busy} disabled={!domainSlug} onClick={submit}>Publish listing</Button>
+              <Button variant="primary" loading={busy} disabled={!domainSlug || ready.data?.qualified === false} onClick={submit}>Publish listing</Button>
               <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             </div>
           </div>

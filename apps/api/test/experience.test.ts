@@ -360,3 +360,27 @@ describe('prompt-connected agent: the connection is a mind connection', () => {
     expect(r.body.score).toBeGreaterThan(50);
   });
 });
+
+describe('trainer readiness checklist', () => {
+  it('shows exactly what is missing, counts untagged cases, and tagging them moves the agent toward qualifying', async () => {
+    const owner = await createUserDirect();
+    const agent = await makeAgent(owner, 'Readiness Bot', { allowTraining: true });
+    const hist = HISTORY_TEMPLATES.flatMap((t) => Array.from({ length: 5 }, (_, i) => ({ situation: t.situation(i + 30), action: t.action, reasoning: t.reasoning, outcome: t.outcome, lesson: t.lesson, result: t.result, occurredAt: new Date(Date.now() - (i + 1) * 20 * 86_400_000).toISOString() })));
+    expect((await owner.request('POST', `/experience/agents/${agent.id}/import`, { content: JSON.stringify(hist) })).body.created).toBe(25);
+
+    const before = await owner.request('GET', `/experience/agents/${agent.id}/readiness?domain=${DOMAIN}`);
+    expect(before.status).toBe(200);
+    expect(before.body).toMatchObject({ qualified: false, untaggedCount: 25 });
+    expect(before.body.checks.find((c: { key: string }) => c.key === 'cases')).toMatchObject({ ok: false, current: 0, required: 20 });
+
+    const tagged = await owner.request('POST', `/experience/agents/${agent.id}/records/tag-domain`, { domain: DOMAIN });
+    expect(tagged.body).toMatchObject({ tagged: 25, domain: DOMAIN });
+    const after = await owner.request('GET', `/experience/agents/${agent.id}/readiness?domain=${DOMAIN}`);
+    expect(after.body.untaggedCount).toBe(0);
+    expect(after.body.checks.find((c: { key: string }) => c.key === 'cases')).toMatchObject({ ok: true, current: 25 });
+    expect(after.body.checks.find((c: { key: string }) => c.key === 'replay').ok).toBe(false); // still needs a replay
+    expect(after.body.qualified).toBe(false);
+
+    expect((await (await createUserDirect()).request('GET', `/experience/agents/${agent.id}/readiness?domain=${DOMAIN}`)).status).toBe(404);
+  });
+});

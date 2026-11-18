@@ -119,7 +119,7 @@ export default function AgentDetailPage() {
                 onChanged={() => mutate()} onDisconnect={() => setConfirm('disconnect')} onDelete={() => setConfirm('delete')} />
             )}
             <CertificationSummary agentId={agent.id} />
-            {can('marketplace.publish') && <TrainerListingCard agentId={agent.id} agentName={agent.name} isPublic={!!agent.isPublic} />}
+            {can('marketplace.publish') && <TrainerListingCard agentId={agent.id} agentName={agent.name} isPublic={!!agent.isPublic} onGoExperience={() => { setTab('experience'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
             <Overview agent={agent} canManage={can('agents.connect')} />
             {isPromptAgent(agent) && <KeepOnline />}
           </div>

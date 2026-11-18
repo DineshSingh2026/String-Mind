@@ -31,7 +31,7 @@ import {
   REPLAY_JOB, REPLAY_MAX_ITEMS, REPLAY_MIN_ITEMS, REPLAY_SWEEP_JOB, cancelReplay, createReplay, ensureReplaySweepScheduled, handleReplayTaskAnswer,
   replayView, runReplay, sweepReplays,
 } from '../../engine/experience/replay.js';
-import { QUALIFY, REPLAY_VALID_DAYS, STALE_PENDING_DAYS, WEIGHTS, getExperienceScores, recomputeExperienceScores, scoreView } from '../../engine/experience/score.js';
+import { QUALIFY, REPLAY_VALID_DAYS, STALE_PENDING_DAYS, WEIGHTS, getExperienceScores, recomputeExperienceScores, scoreView, trainerQualification } from '../../engine/experience/score.js';
 import { publicAgentWhere } from '../marketplace/cards.js';
 import { TEMPLATE_CSV, memoryExportPrompt, memorySyncPrompt } from './prompts.js';
 import { handleMemorySyncAnswer } from './sync.js';
@@ -128,6 +128,47 @@ export default async function routes(app: FastifyInstance) {
     const { agentId } = parse(AgentParam, req.params);
     await getOwnedAgent(agentId, a.orgId);
     return profile(agentId);
+  });
+
+  /**
+   * Trainer readiness for one domain: every requirement with the agent's current value, so the owner sees exactly what is
+   * missing BEFORE publishing (same rules the server enforces on listings — engine/experience/score.ts QUALIFY).
+   */
+  app.get('/agents/:agentId/readiness', async (req) => {
+    const a = requirePerm(req, 'agents.read');
+    const { agentId } = parse(AgentParam, req.params);
+    await getOwnedAgent(agentId, a.orgId);
+    const { domain } = parse(z.object({ domain: z.string().min(1).max(64) }), req.query);
+    const q = await trainerQualification(agentId, domain);
+    const row = q.row;
+    const [dom] = await db().select({ id: schema.capabilityDomains.id }).from(schema.capabilityDomains).where(eq(schema.capabilityDomains.slug, domain)).limit(1);
+    const [untagged] = await db().select({ n: sql<number>`count(*)::int` }).from(schema.agentExperiences)
+      .where(and(eq(schema.agentExperiences.agentId, agentId), sql`${schema.agentExperiences.domainId} is null`));
+    const resolved = row?.resolvedCount ?? 0;
+    const replayOk = row?.replayScore != null && row.replayScore >= QUALIFY.minReplayScore;
+    return {
+      domain, known: !!dom, qualified: q.qualified, missing: q.missing, untaggedCount: Number(untagged?.n ?? 0),
+      checks: [
+        { key: 'cases', label: 'Real cases with a known outcome in this domain', ok: resolved >= QUALIFY.minResolved, current: resolved, required: QUALIFY.minResolved },
+        { key: 'replay', label: 'Experience replay passed', ok: replayOk, current: row?.replayScore ?? null, required: QUALIFY.minReplayScore },
+        { key: 'score', label: 'Experience Score', ok: (row?.score ?? 0) >= QUALIFY.minScore, current: row?.score ?? 0, required: QUALIFY.minScore },
+      ],
+    };
+  });
+
+  /** Tag every untagged (general) case with a domain — the owner's statement that this history belongs to that domain. */
+  app.post('/agents/:agentId/records/tag-domain', async (req) => {
+    const a = requirePerm(req, 'agents.update');
+    const { agentId } = parse(AgentParam, req.params);
+    await getOwnedAgent(agentId, a.orgId);
+    const { domain } = parse(z.object({ domain: z.string().min(1).max(64) }), req.body);
+    const [dom] = await db().select({ id: schema.capabilityDomains.id }).from(schema.capabilityDomains).where(eq(schema.capabilityDomains.slug, domain)).limit(1);
+    if (!dom) throw notFound('Domain');
+    const out = await db().update(schema.agentExperiences).set({ domainId: dom.id, updatedAt: new Date() })
+      .where(and(eq(schema.agentExperiences.agentId, agentId), sql`${schema.agentExperiences.domainId} is null`)).returning({ id: schema.agentExperiences.id });
+    await recomputeExperienceScores(agentId);
+    await audit({ action: 'experience.tag_domain', targetType: 'agent', targetId: agentId, metadata: { domain, count: out.length } }, req);
+    return { tagged: out.length, domain };
   });
 
   /** Prompts that connect the agent's own memory to its Experience Ledger (sync via API, or export a file). */
