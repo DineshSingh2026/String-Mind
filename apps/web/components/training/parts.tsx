@@ -129,3 +129,48 @@ export function MessageBubble({ m, learner, trainer }: { m: TrainingMessage; lea
     </div>
   );
 }
+
+/**
+ * Neural link: the trainer and the learner joined by a living conduit. While the session is live, data packets in the
+ * trainer's colour flow to the learner (knowledge going in) and the learner's colour flows back (answers coming out).
+ */
+export function NeuralLink({ trainer, learner, live, stage }: { trainer: AgentRef | null; learner: AgentRef | null; live: boolean; stage?: string | null }) {
+  const tName = trainer?.name ?? 'Trainer'; const lName = learner?.name ?? 'Learner';
+  const tc = agentColor(trainer?.id ?? tName); const lc = agentColor(learner?.id ?? lName);
+  const path = 'M 30 40 C 140 -6, 260 86, 370 40';
+  const back = 'M 370 40 C 260 86, 140 -6, 30 40';
+  return (
+    <div className={cn('relative overflow-hidden rounded-2xl border border-white/10 bg-black/20 px-3 py-4 sm:px-6', live && 'nl-live')}>
+      <div className="flex items-center gap-3">
+        <div className="flex w-28 shrink-0 flex-col items-center gap-1 text-center sm:w-36">
+          <Avatar name={tName} seed={trainer?.id} src={trainer?.avatar} size={56} />
+          <span className="truncate text-xs font-medium" style={{ color: tc.text }}>{tName}</span>
+          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Trainer</span>
+        </div>
+        <div className="relative min-w-0 flex-1">
+          <svg viewBox="0 0 400 80" className="h-20 w-full" preserveAspectRatio="none" aria-hidden>
+            <defs><linearGradient id="nl-grad" x1="0" x2="1"><stop offset="0" stopColor={tc.solid} /><stop offset="1" stopColor={lc.solid} /></linearGradient></defs>
+            <path d={path} fill="none" stroke="url(#nl-grad)" strokeOpacity="0.25" strokeWidth="6" strokeLinecap="round" />
+            <path className="nl-path" d={path} fill="none" stroke="url(#nl-grad)" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          {live && [0, 1, 2, 3].map((i) => (
+            <span key={`f${i}`} aria-hidden className="nl-packet absolute left-0 top-0 h-2 w-2 rounded-full"
+              style={{ offsetPath: `path('${path}')`, background: tc.solid, boxShadow: `0 0 10px 2px ${tc.solid}`, animationDelay: `${i * 0.6}s`, ['--nl-t' as string]: '2.4s' }} />
+          ))}
+          {live && [0, 1].map((i) => (
+            <span key={`b${i}`} aria-hidden className="nl-packet absolute left-0 top-0 h-1.5 w-1.5 rounded-full"
+              style={{ offsetPath: `path('${back}')`, background: lc.solid, boxShadow: `0 0 8px 2px ${lc.solid}`, animationDelay: `${0.3 + i * 1.6}s`, ['--nl-t' as string]: '3.2s' }} />
+          ))}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 text-center text-[10px] uppercase tracking-[0.2em] text-fg-subtle">
+            {live ? `neural link · ${stage ? stage.replace(/_/g, ' ') : 'live'}` : 'link idle'}
+          </div>
+        </div>
+        <div className="flex w-28 shrink-0 flex-col items-center gap-1 text-center sm:w-36">
+          <Avatar name={lName} seed={learner?.id} src={learner?.avatar} size={56} />
+          <span className="truncate text-xs font-medium" style={{ color: lc.text }}>{lName}</span>
+          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Learner</span>
+        </div>
+      </div>
+    </div>
+  );
+}

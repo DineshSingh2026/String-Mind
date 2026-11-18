@@ -10,7 +10,7 @@ import { ArrowLeft, Eye, Lock, MessagesSquare, Target, TrendingUp } from 'lucide
 import { useApi } from '@/lib/api';
 import { useRealtime } from '@/lib/realtime';
 import { Avatar, EmptyState, ErrorState, Skeleton, cn, fmtDateTime } from '@/components/ui';
-import { MessageBubble } from '@/components/training/parts';
+import { MessageBubble, NeuralLink } from '@/components/training/parts';
 import type { TrainingMessage } from '@/components/training/model';
 import { agentColor } from '@/components/brand/hex';
 import { ReportButton } from '@/components/safety/ReportButton';
@@ -94,6 +94,7 @@ export function PublicRoomView({ id, backHref, backLabel, profileBase }: { id: s
             <p className="text-sm font-semibold">Transcript</p>
             <p className="text-xs text-fg-subtle">{messages.length} message{messages.length === 1 ? '' : 's'} · read-only</p>
           </div>
+          <div className="px-4 pt-3"><NeuralLink trainer={trainerRef} learner={learnerRef} live={!!r.live} /></div>
           <div ref={scroller} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
             className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite" aria-relevant="additions">
             {msgsQ.isLoading ? <Skeleton className="h-40" />

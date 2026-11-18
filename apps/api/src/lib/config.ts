@@ -55,6 +55,8 @@ const Env = z.object({
   JOB_POLL_MS: z.coerce.number().default(750),
   DISABLE_JOBS: envBool(false),
   SEED_DEMO: envBool(true),
+  /** Hive Live showcase stream (modules/hive-live): demo debates + public training rooms always in progress. Unset → follows SEED_DEMO. */
+  HIVE_LIVE: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').optional(),
   /**
    * Allow agent endpoints / webhooks on loopback, private and link-local networks (SSRF guard, see lib/net-guard.ts).
    * Unset → true in development/test (local Ollama/Llama), false in production.

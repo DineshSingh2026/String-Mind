@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { TrainerListingCard } from '@/components/app/TrainerListingCard';
 import { ExperienceTab } from '@/components/app/ExperienceTab';
 import { WalletTab } from '@/components/app/WalletTab';
+import { AgentHero } from '@/components/app/AgentHero';
 import { CertificationSummary } from '@/components/evaluation/CertificationSummary';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -73,16 +74,10 @@ export default function AgentDetailPage() {
   return (
     <div className="space-y-6">
       <BackLink href="/app/agents">My agents</BackLink>
-      <section className="card flex flex-col gap-5 p-5 lg:flex-row lg:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
-          <Avatar name={agent.name} src={agent.avatarUrl} size={64} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-2xl font-semibold">{agent.name}</h1><StatusPill status={agent.status} />{paused && <Badge tone="warning" icon={<Pause className="h-3 w-3" aria-hidden />}>Paused</Badge>}{agent.isPublic && <Badge tone="gold">Public</Badge>}</div>
-            <p className="mt-1 text-sm text-fg-muted">{isPromptAgent(agent) ? 'Connected via prompt' : `${agent.provider?.name ?? 'Unknown provider'}${agent.modelName ? ` · ${agent.modelName}` : ''}`}{agent.role ? ` · ${agent.role}` : ''}</p>
-          </div>
-          <ScoreRing score={agent.overallScore ?? null} size={64} label="Overall score" />
-        </div>
-        <div className="flex flex-wrap gap-2 lg:max-w-[55%] lg:justify-end">
+      <AgentHero agent={agent} overallScore={agent.overallScore ?? null}
+        badges={<><StatusPill status={agent.status} />{paused && <Badge tone="warning" icon={<Pause className="h-3 w-3" aria-hidden />}>Paused</Badge>}{agent.isPublic && <Badge tone="gold">Public</Badge>}</>}
+        subtitle={<>{isPromptAgent(agent) ? 'Connected via prompt' : `${agent.provider?.name ?? 'Unknown provider'}${agent.modelName ? ` · ${agent.modelName}` : ''}`}{agent.role ? ` · ${agent.role}` : ''}</>}
+        actions={<>
           {can('agents.connect') && <Button size="sm" variant="outline" loading={busy === 'test'} onClick={test} icon={<PlugZap className="h-4 w-4" />}>Test</Button>}
           {can('assessments.run') && <Button size="sm" variant="outline" loading={busy === 'assess'} disabled={paused} title={pausedHint} onClick={assess} icon={<Activity className="h-4 w-4" />}>Run assessment</Button>}
           {can('training.request') && <Button size="sm" variant="ai" disabled={paused} title={pausedHint} onClick={startTraining} icon={<GraduationCap className="h-4 w-4" />}>Start training</Button>}
@@ -90,8 +85,7 @@ export default function AgentDetailPage() {
           {can('agents.update') && (
             <label className="flex items-center gap-2 rounded-xl border border-line px-3 text-xs text-fg-muted">Public <Toggle label="Publish to marketplace" checked={!!agent.isPublic} disabled={busy === 'publish'} onChange={publish} /></label>
           )}
-        </div>
-      </section>
+        </>} />
       {paused && (
         <div className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4 sm:flex-row sm:items-center sm:justify-between" role="status">
           <div className="flex items-start gap-3">

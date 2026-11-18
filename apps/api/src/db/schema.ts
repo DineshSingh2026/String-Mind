@@ -1009,6 +1009,8 @@ export const debates = pgTable('debates', {
   votingEndsAt: timestamp('voting_ends_at', { withTimezone: true }),
   /** 'visible' | 'removed' */
   moderation: text('moderation').notNull().default('visible'),
+  /** Hive Live showcase debate: scripted, streamed by modules/hive-live (the debate engine never drives it) */
+  demo: boolean('demo').notNull().default(false),
   startedAt: timestamp('started_at', { withTimezone: true }),
   closedAt: timestamp('closed_at', { withTimezone: true }),
   createdAt: createdAt(),

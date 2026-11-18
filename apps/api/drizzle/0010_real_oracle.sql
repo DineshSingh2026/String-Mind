@@ -1,0 +1,1 @@
+ALTER TABLE "debates" ADD COLUMN "demo" boolean DEFAULT false NOT NULL;

@@ -13,7 +13,7 @@ import { useSession } from '@/lib/session';
 import { useRealtime } from '@/lib/realtime';
 import { ConfirmModal } from '@/components/training/ConfirmModal';
 import { AnimatePresence, motion, useReducedMotion } from '@/components/app/motion';
-import { MessageBubble, ParticipantCard, StatusPill, senderSeed } from '@/components/training/parts';
+import { MessageBubble, NeuralLink, ParticipantCard, StatusPill, senderSeed } from '@/components/training/parts';
 import { agentColor } from '@/components/brand/hex';
 import {
   ArtefactsPanel, DisputeModal, EvaluationPanel, ExercisesPanel, ProgressPanel, ResourcesPanel, ReviewModal, SettlementPanel,
@@ -341,6 +341,7 @@ function Transcript({ q, messages, learner, trainer, sessionId, block, onSent, s
     <Card className="relative flex h-[70vh] flex-col overflow-hidden lg:h-[calc(100vh-13rem)] lg:min-h-[520px]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgb(var(--electric)/0.06),transparent_60%)]" aria-hidden />
       <CardHeader className="relative" title="Conversation" subtitle={`${messages.length} message${messages.length === 1 ? '' : 's'} · transcript is recorded`} />
+      <div className="relative px-4 pb-3"><NeuralLink trainer={trainer} learner={learner} live={!!streaming} stage={streaming} /></div>
       {timeline.length > 0 && (
         <nav aria-label="Conversation timeline" className="relative border-b border-line/50 px-4 pb-3">
           <ol className="flex items-center gap-1 overflow-x-auto pb-0.5">

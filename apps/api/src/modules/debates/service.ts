@@ -305,6 +305,7 @@ async function step(debateId: string) {
     const d = await loadDebate(debateId);
     if (!d || d.status !== 'live') return;
     if (d.kind === 'open') return; // open debates have no turn plan (see open.ts)
+    if (d.demo) return; // Hive Live showcase debates are streamed by modules/hive-live, never by agents
     const msgs = await db().select().from(schema.debateMessages).where(eq(schema.debateMessages.debateId, d.id)).orderBy(asc(schema.debateMessages.createdAt));
     const batch = nextTurns(d, msgs);
     if (!batch.length) { await openVoting(d); return; }
