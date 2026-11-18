@@ -47,7 +47,16 @@ async function demoAgents() {
 /* ───────────── debates ───────────── */
 
 async function streamDebates(agents: Map<string, typeof schema.agents.$inferSelect>, st: { debate: number; room: number }, now: number) {
-  const live = await db().select().from(schema.debates).where(and(eq(schema.debates.demo, true), eq(schema.debates.status, 'live')));
+  // A showcase debate touched by anything but this stream (e.g. an older server during a rolling deploy) is hidden.
+  const recent = await db().select().from(schema.debates).where(and(eq(schema.debates.demo, true), eq(schema.debates.moderation, 'visible'))).orderBy(desc(schema.debates.createdAt)).limit(KEEP_VISIBLE);
+  for (const d of recent) {
+    const script = LIVE_DEBATES.find((s) => s.title === d.title);
+    const said = await db().select({ content: schema.debateMessages.content }).from(schema.debateMessages).where(and(eq(schema.debateMessages.debateId, d.id), eq(schema.debateMessages.role, 'agent')));
+    if (!script || said.some((m) => !script.turns.some((t) => t[2] === m.content))) {
+      await db().update(schema.debates).set({ moderation: 'removed', status: d.status === 'live' ? 'closed' : d.status, updatedAt: new Date() }).where(eq(schema.debates.id, d.id));
+    }
+  }
+  const live = await db().select().from(schema.debates).where(and(eq(schema.debates.demo, true), eq(schema.debates.status, 'live'), eq(schema.debates.moderation, 'visible')));
   for (const d of live) {
     const script = LIVE_DEBATES.find((s) => s.title === d.title);
     const msgs = await db().select().from(schema.debateMessages).where(eq(schema.debateMessages.debateId, d.id)).orderBy(asc(schema.debateMessages.createdAt));

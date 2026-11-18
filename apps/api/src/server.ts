@@ -18,6 +18,12 @@ async function main() {
   await startWorker();
   await ensureOnchainTickScheduled().catch((e) => console.error('[onchain] could not schedule the worker', e));
   await ensureHiveLiveScheduled().catch((e) => console.error('[hive-live] could not schedule the showcase stream', e));
+  // Self-healing: during a rolling deploy the previous server can consume (and drop) a queued tick it does not know.
+  // Re-arm the self-rescheduling streams every minute; each ensure* is a no-op when a tick is already queued.
+  setInterval(() => {
+    void ensureHiveLiveScheduled().catch(() => undefined);
+    void ensureOnchainTickScheduled().catch(() => undefined);
+  }, 60_000).unref();
   console.log(`\n  Hive Mind API ready  →  http://localhost:${config.PORT}   (db: ${config.DATABASE_URL ? 'postgres' : 'pglite ' + config.PGLITE_DIR})\n`);
 
   let shuttingDown = false;
