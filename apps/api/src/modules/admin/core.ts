@@ -21,7 +21,7 @@ export default async function core(app: FastifyInstance) {
     const sessionsBy = await d.select({ status: schema.trainingSessions.status, n: sql<number>`count(*)::int` }).from(schema.trainingSessions).groupBy(schema.trainingSessions.status);
     // IDLE token economy (no fiat): issuance via welcome bonuses, circulation in org wallets, platform commission.
     const [bonus] = await d.select({ count: sql<number>`count(*)::int`, total: sql<number>`coalesce(sum(amount),0)::bigint` }).from(schema.transactions).where(eq(schema.transactions.type, 'welcome_bonus'));
-    const [circ] = await d.select({ total: sql<number>`coalesce(sum(available + locked + withdrawable),0)::bigint` }).from(schema.wallets).where(eq(schema.wallets.kind, 'org'));
+    const [circ] = await d.select({ total: sql<number>`coalesce(sum(available + locked + withdrawable),0)::bigint` }).from(schema.wallets).where(and(eq(schema.wallets.kind, 'org'), sql`${schema.wallets.orgId} not in (select id from organisations where slug = 'aix-platform')`));
     const [comm] = await d.select({ total: sql<number>`coalesce(sum(commission_credits),0)::bigint` }).from(schema.trainingSessions).where(eq(schema.trainingSessions.settlementStatus, 'settled'));
     const [platformWallet] = await d.select().from(schema.wallets).where(eq(schema.wallets.kind, 'platform')).limit(1);
     const jobsBy = await d.select({ status: schema.jobs.status, n: sql<number>`count(*)::int` }).from(schema.jobs).groupBy(schema.jobs.status);

@@ -27,7 +27,13 @@ export function SignInForm() {
   const anim = reduce ? {} : { initial: { opacity: 0, x: 24 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -24 }, transition: { duration: 0.3, ease: [0.2, 0.7, 0.2, 1] as const } };
   const errBox = <AnimatePresence>{err && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden"><Alert tone="danger">{err}</Alert></motion.div>}</AnimatePresence>;
 
-  const done = async () => { await mutate('/auth/me'); router.push(next); router.refresh(); };
+  // Platform administrators always land on the admin console (they never use the member app).
+  const done = async (user?: unknown) => {
+    const me = (await mutate('/auth/me')) as { user?: { platformRole?: string } } | undefined;
+    const role = (user as { platformRole?: string } | undefined)?.platformRole ?? me?.user?.platformRole;
+    router.push(role === 'admin' || role === 'super_admin' ? (next.startsWith('/admin') ? next : '/admin') : next);
+    router.refresh();
+  };
 
   const login = async (e: FormEvent) => {
     e.preventDefault(); setErr(null);
@@ -37,7 +43,7 @@ export function SignInForm() {
       const r = await api.post<LoginRes>('/auth/login', { email: email.trim(), password });
       if (r.mfaRequired && r.challengeId) { setChallenge(r.challengeId); setBusy(false); return; }
       stashWelcomeBonus(r.welcomeBonus);
-      await done();
+      await done(r.user);
     } catch (x) { setErr(errorMessage(x)); setBusy(false); }
   };
   const verify = async (e: FormEvent) => {
@@ -47,7 +53,7 @@ export function SignInForm() {
     try {
       const r = await api.post<LoginRes>('/auth/mfa/verify-login', { challengeId: challenge, code: code.trim() });
       stashWelcomeBonus(r?.welcomeBonus);
-      await done();
+      await done(r?.user);
     }
     catch (x) { setErr(errorMessage(x)); setBusy(false); }
   };

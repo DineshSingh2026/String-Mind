@@ -4,40 +4,50 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   LayoutDashboard, Users, Bot, Plug, FlaskConical, GraduationCap, ShieldAlert, Landmark, Percent, CreditCard, Siren, Gavel,
-  ScrollText, Lock, Settings, Cog, HeartPulse, Menu, X, ArrowLeft, ShieldX, Sparkles, Scale,
+  ScrollText, Lock, Settings, Cog, HeartPulse, Menu, X, LogOut, ShieldX, Sparkles, Scale,
 } from 'lucide-react';
 import { LibraryBig, Wallet } from 'lucide-react';
 import { LogoMark, Wordmark } from '@/components/brand/Logo';
 import { Button, Spinner, cn } from '@/components/ui';
 import { SessionProvider, useSession } from '@/lib/session';
-import { useApi } from '@/lib/api';
+import { api, useApi } from '@/lib/api';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { AmbientBackground, useSpotlightDelegation } from '@/components/shell/ambient';
 import { PulseDot } from '@/components/app/motion';
 import '@/components/shell/app-motion.css';
 
-const NAV = [
-  { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-  { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/agents', label: 'Agents', icon: Bot },
-  { href: '/admin/providers', label: 'Providers', icon: Plug },
-  { href: '/admin/benchmarks', label: 'Benchmarks & review', icon: FlaskConical },
-  { href: '/admin/question-bank', label: 'Question bank', icon: LibraryBig },
-  { href: '/admin/training', label: 'Training sessions', icon: GraduationCap },
-  { href: '/admin/hive', label: 'Hive learning', icon: Sparkles },
-  { href: '/admin/hive-judge', label: 'Hive Judge', icon: Scale },
-  { href: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },
-  { href: '/admin/finance', label: 'Token economy', icon: Landmark },
-  { href: '/admin/treasury', label: 'Treasury & revenue', icon: Wallet },
-  { href: '/admin/commissions', label: 'Commission', icon: Percent },
-  { href: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { href: '/admin/fraud', label: 'Fraud flags', icon: Siren },
-  { href: '/admin/disputes', label: 'Disputes', icon: Gavel },
-  { href: '/admin/audit', label: 'Audit logs', icon: ScrollText },
-  { href: '/admin/security', label: 'Security', icon: Lock },
-  { href: '/admin/settings', label: 'System settings', icon: Settings },
-  { href: '/admin/jobs', label: 'Jobs', icon: Cog },
-  { href: '/admin/health', label: 'System health', icon: HeartPulse },
+const GROUPS = [
+  { label: 'Command', items: [
+    { href: '/admin', label: 'Command center', icon: LayoutDashboard },
+  ] },
+  { label: 'People & agents', items: [
+    { href: '/admin/users', label: 'Users', icon: Users },
+    { href: '/admin/agents', label: 'Agents', icon: Bot },
+    { href: '/admin/providers', label: 'Providers', icon: Plug },
+    { href: '/admin/training', label: 'Training oversight', icon: GraduationCap },
+  ] },
+  { label: 'Quality & trust', items: [
+    { href: '/admin/benchmarks', label: 'Benchmarks & review', icon: FlaskConical },
+    { href: '/admin/question-bank', label: 'Question bank', icon: LibraryBig },
+    { href: '/admin/hive', label: 'Hive learning', icon: Sparkles },
+    { href: '/admin/hive-judge', label: 'Hive Judge', icon: Scale },
+  ] },
+  { label: 'Safety & money', items: [
+    { href: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },
+    { href: '/admin/fraud', label: 'Fraud flags', icon: Siren },
+    { href: '/admin/disputes', label: 'Disputes', icon: Gavel },
+    { href: '/admin/finance', label: 'Token economy', icon: Landmark },
+    { href: '/admin/treasury', label: 'Treasury & revenue', icon: Wallet },
+    { href: '/admin/commissions', label: 'Commission', icon: Percent },
+    { href: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
+  ] },
+  { label: 'System', items: [
+    { href: '/admin/audit', label: 'Audit logs', icon: ScrollText },
+    { href: '/admin/security', label: 'Security', icon: Lock },
+    { href: '/admin/settings', label: 'System settings', icon: Settings },
+    { href: '/admin/jobs', label: 'Jobs', icon: Cog },
+    { href: '/admin/health', label: 'System health', icon: HeartPulse },
+  ] },
 ] as const;
 
 const active = (path: string, href: string) => (href === '/admin' ? path === '/admin' : path === href || path.startsWith(href + '/'));
@@ -57,7 +67,10 @@ function Nav({ path, id }: { path: string; id: string }) {
   return (
     <nav aria-label="Admin modules" className="space-y-0.5">
       <LayoutGroup id={id}>
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {GROUPS.map((g) => (
+          <div key={g.label} className="mb-3">
+            <p className="mb-1 px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-fg-subtle/70">{g.label}</p>
+            {g.items.map(({ href, label, icon: Icon }) => {
           const on = active(path, href);
           return (
             <Link key={href} href={href} aria-current={on ? 'page' : undefined}
@@ -69,7 +82,9 @@ function Nav({ path, id }: { path: string; id: string }) {
               {href === '/admin/health' && <span className="relative ml-auto"><HealthDot /></span>}
             </Link>
           );
-        })}
+            })}
+          </div>
+        ))}
       </LayoutGroup>
     </nav>
   );
@@ -119,7 +134,7 @@ function Guarded({ children }: { children: ReactNode }) {
           <p className="mt-3 font-mono text-xs text-fg-subtle">403 · FORBIDDEN</p>
           <h1 className="mt-1 text-xl font-semibold">Administrator access required</h1>
           <p className="mt-2 text-sm text-fg-muted">Your account ({me.user.email}) does not have a platform admin role. This attempt may be recorded in the audit log.</p>
-          <Button className="mt-6" variant="primary" href="/app">Back to the app</Button>
+          <Button className="mt-6" variant="primary" href="/app">Go to the member app</Button>
         </div>
       </div>
     );
@@ -132,7 +147,7 @@ function Guarded({ children }: { children: ReactNode }) {
       <div className="mt-4 border-t border-line/60 pt-3">
         <p className="truncate px-3 text-xs text-fg-muted">{me.user.name}</p>
         <p className="px-3 text-[11px] uppercase tracking-wider text-gold">{me.user.platformRole.replace('_', ' ')}</p>
-        <Link href="/app" className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-fg-muted hover:bg-ink-800"><ArrowLeft className="h-3.5 w-3.5" />Exit admin</Link>
+        <button onClick={async () => { await api.post('/auth/logout').catch(() => undefined); window.location.href = '/sign-in'; }} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-fg-muted hover:bg-ink-800"><LogOut className="h-3.5 w-3.5" />Sign out</button>
       </div>
     </>
   );

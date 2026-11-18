@@ -8,6 +8,7 @@ import core from './core.js';
 import moderation from './moderation.js';
 import finance from './finance.js';
 import system from './system.js';
+import command from './command.js';
 
 export default async function routes(app: FastifyInstance) {
   app.addHook('preHandler', async (req) => { requireAdmin(req); });
@@ -15,6 +16,7 @@ export default async function routes(app: FastifyInstance) {
   await moderation(app);
   await finance(app);
   await system(app);
+  await command(app);
 }
 
 /** Register background job handlers for this module (called once at startup). */

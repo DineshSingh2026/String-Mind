@@ -10,7 +10,7 @@ export default function AdminTrainingPage() {
   const [open, setOpen] = useState<Row | null>(null);
   return (
     <div>
-      <AdminHeader title="Training sessions" description="Monitor every training session across organisations: stage, independent scores and settlement."
+      <AdminHeader title="Training oversight" description="Monitor every training session across organisations: stage, independent scores and settlement."
         actions={<Select aria-label="Status" className="h-9 w-40" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>{['scheduled', 'active', 'paused', 'completed', 'failed', 'cancelled', 'disputed'].map((s) => <option key={s} value={s}>{s}</option>)}
         </Select>} />

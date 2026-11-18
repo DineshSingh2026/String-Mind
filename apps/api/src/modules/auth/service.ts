@@ -89,7 +89,7 @@ export async function buildMe(auth: AuthContext) {
       .filter((r) => r.o.status === 'active')
       .map((r) => ({ id: r.o.id, name: r.o.name, slug: r.o.slug, type: r.o.type, role: r.m.role as OrgRole })),
     /** One-time IDLE welcome bonus status (docs/IDLE_TOKENS.md). */
-    welcomeBonus: await welcomeBonusStatus(auth.user.id),
+    welcomeBonus: auth.user.platformRole === 'user' ? await welcomeBonusStatus(auth.user.id) : null,
   };
 }
 

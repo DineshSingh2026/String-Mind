@@ -198,6 +198,9 @@ function Guard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   useEffect(() => { if (!loading && !me && !unavailable) router.replace(`/sign-in?next=${encodeURIComponent(path)}`); }, [loading, me, unavailable, router, path]);
+  // Platform administrators control and monitor the platform from /admin; the member app is not theirs.
+  const isAdmin = me?.user.platformRole === 'admin' || me?.user.platformRole === 'super_admin';
+  useEffect(() => { if (isAdmin) router.replace('/admin'); }, [isAdmin, router]);
   if (unavailable) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
@@ -209,7 +212,7 @@ function Guard({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (loading || !me) {
+  if (loading || !me || isAdmin) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <LogoMark size={44} className="ax-glow-pulse" />

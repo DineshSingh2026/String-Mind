@@ -111,9 +111,14 @@ export function requireAuth(req: FastifyRequest): AuthContext {
   return req.auth;
 }
 
+/** Permissions that mean "taking part" in the agent economy (training / agents / listings): not available to platform admins. */
+const PARTICIPANT_PERMS = new Set<string>(['agents.create', 'training.request', 'training.respond', 'training.participate', 'marketplace.publish']);
+
 /** Signed in + active org + org role grants `perm` (+ API key scope if key auth). Returns ctx with non-null orgId. */
 export function requirePerm(req: FastifyRequest, perm: Permission): AuthContext & { orgId: string; orgRole: OrgRole } {
   const a = requireAuth(req);
+  // Platform administrators control and monitor the marketplace; they never take part in it.
+  if (PARTICIPANT_PERMS.has(perm) && (a.user.platformRole === 'admin' || a.user.platformRole === 'super_admin')) throw forbidden('Platform administrators oversee the platform and cannot create agents, train, teach or list on the marketplace.');
   if (!a.orgId || !a.orgRole) throw forbidden('No active organisation');
   if (!roleHas(a.orgRole, perm)) throw forbidden(`Missing permission: ${perm}`);
   if (a.apiKeyScopes && !a.apiKeyScopes.includes(perm) && !a.apiKeyScopes.includes('*')) throw forbidden(`API key lacks scope: ${perm}`);
