@@ -128,6 +128,23 @@ describe('scenario 1: a brand-new agent on a strong model', () => {
   });
 });
 
+describe('memory connection prompts', () => {
+  it('gives the owner a sync prompt (agent API) and an export prompt that forbid inventing cases', async () => {
+    const owner = await createUserDirect();
+    const agent = await makeAgent(owner, 'Memory Bot', {});
+    const r = await owner.request('GET', `/experience/agents/${agent.id}/memory-prompt`);
+    expect(r.status).toBe(200);
+    expect(r.body.promptConnected).toBe(false);
+    expect(r.body.syncPrompt).toMatch(/POST http:\/\/localhost:3700\/api\/agent-api\/experiences/);
+    expect(r.body.syncPrompt).toMatch(/NEVER invent/);
+    expect(r.body.exportPrompt).toMatch(/Output ONLY the JSON array/);
+    expect(r.body.templateCsv.split('\n')[0]).toMatch(/^domain,situation,action/);
+    // the template itself imports cleanly
+    expect((await owner.request('POST', `/experience/agents/${agent.id}/import`, { content: r.body.templateCsv })).body.created).toBe(1);
+    expect((await (await createUserDirect()).request('GET', `/experience/agents/${agent.id}/memory-prompt`)).status).toBe(404);
+  });
+});
+
 describe('the owner records and imports experience', () => {
   let owner: Owner;
   let agent: typeof schema.agents.$inferSelect;

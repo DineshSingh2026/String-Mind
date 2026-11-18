@@ -38,6 +38,7 @@ export function ExperienceTab({ id, canWrite }: { id: string; canWrite: boolean 
         <p className="text-sm">{p.totals.records} recorded cases · {p.totals.pending} waiting for an outcome</p>
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      {canWrite && <MemoryConnectCard id={id} />}
 
       {p.scores.length > 0 && (
         <div className="card"><Table head={['Domain', 'Experience', 'Cases (witnessed)', 'Span', 'Success', 'Replay', 'Can train']}>
@@ -100,6 +101,50 @@ export function ExperienceTab({ id, canWrite }: { id: string; canWrite: boolean 
           </Table>
         ) : <EmptyState title="No experience recorded yet" description="A new agent has no experience, so its Experience Score is 0 whatever its model. Import its past work above, or let the connected agent record decisions via the agent API (see connect.md)." />}
       </div>
+    </div>
+  );
+}
+
+interface MemoryPrompts { promptConnected: boolean; syncPrompt: string; exportPrompt: string; templateCsv: string }
+
+/** "Connect your agent's memory": prompts the owner pastes into the agent (sync via API, or export a file to import). */
+export function MemoryConnectCard({ id }: { id: string }) {
+  const { data } = useApi<MemoryPrompts>(`/experience/agents/${id}/memory-prompt`);
+  const [copied, setCopied] = useState<string | null>(null);
+  if (!data) return null;
+  const copy = async (key: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 2000); } catch { setCopied(null); }
+  };
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([data.templateCsv], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'hive-mind-experience-template.csv'; a.click(); URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="card p-5 space-y-3">
+      <h3 className="font-semibold">Connect your agent&apos;s memory</h3>
+      <p className="text-sm text-muted">
+        Paste a prompt into your agent. It reads its own memory and history and sends every real case to this agent&apos;s
+        Experience Ledger. The prompt forbids inventing cases: imported history counts as self-reported, and replays test it.
+      </p>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ai" onClick={() => copy('sync', data.syncPrompt)}>{copied === 'sync' ? 'Copied ✓' : 'Copy memory-sync prompt'}</Button>
+          <span className="text-xs text-muted">{data.promptConnected
+            ? 'Recommended: your agent is connected, so it sends its history directly and keeps recording live (witnessed).'
+            : 'Works once the agent is connected via prompt (it needs its agent token). Not connected? Use the export prompt.'}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => copy('export', data.exportPrompt)}>{copied === 'export' ? 'Copied ✓' : 'Copy export prompt'}</Button>
+          <span className="text-xs text-muted">Any agent: it writes its history as JSON. Save it as a .json file and import it below.</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={download}>Download CSV template</Button>
+          <span className="text-xs text-muted">Fill it in yourself or export from your own logs.</span>
+        </div>
+      </div>
+      <details className="text-sm"><summary className="cursor-pointer text-muted">Preview the memory-sync prompt</summary>
+        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-black/5 p-3 text-xs">{data.syncPrompt}</pre>
+      </details>
     </div>
   );
 }

@@ -33,6 +33,8 @@ import {
 } from '../../engine/experience/replay.js';
 import { QUALIFY, REPLAY_VALID_DAYS, STALE_PENDING_DAYS, WEIGHTS, getExperienceScores, recomputeExperienceScores, scoreView } from '../../engine/experience/score.js';
 import { publicAgentWhere } from '../marketplace/cards.js';
+import { TEMPLATE_CSV, memoryExportPrompt, memorySyncPrompt } from './prompts.js';
+import { PROMPT_METHOD, promptConfig } from '../../lib/agent-inbox.js';
 
 const Id = z.string().uuid();
 const AgentParam = z.object({ agentId: Id });
@@ -124,6 +126,21 @@ export default async function routes(app: FastifyInstance) {
     const { agentId } = parse(AgentParam, req.params);
     await getOwnedAgent(agentId, a.orgId);
     return profile(agentId);
+  });
+
+  /** Prompts that connect the agent's own memory to its Experience Ledger (sync via API, or export a file). */
+  app.get('/agents/:agentId/memory-prompt', async (req) => {
+    const a = requirePerm(req, 'agents.read');
+    const { agentId } = parse(AgentParam, req.params);
+    const agent = await getOwnedAgent(agentId, a.orgId);
+    const [conn] = await db().select().from(schema.agentConnections).where(eq(schema.agentConnections.agentId, agent.id)).limit(1);
+    const promptConnected = conn?.method === PROMPT_METHOD && !!promptConfig(conn).verifiedAt;
+    return {
+      promptConnected,
+      syncPrompt: memorySyncPrompt(agent.name),
+      exportPrompt: memoryExportPrompt(agent.name),
+      templateCsv: TEMPLATE_CSV,
+    };
   });
 
   app.get('/agents/:agentId/records', async (req) => {
