@@ -50,6 +50,16 @@ describe('Hive Live showcase stream', () => {
     expect(status.json()).toMatchObject({ enabled: true, liveDebates: 2, liveRooms: 2 });
   });
 
+  it('gives the demo trainers labelled demo experience, a real replay, and a trainer level', async () => {
+    const [agent] = await database.select().from(schema.agents).where(eq(schema.agents.slug, 'codemaster-pro-demo'));
+    const rows = await database.select().from(schema.agentExperiences).where(eq(schema.agentExperiences.agentId, agent!.id));
+    expect(rows.length).toBeGreaterThanOrEqual(20);
+    expect(rows.every((r) => r.tags.includes('demo') && r.situation.startsWith('Demo case'))).toBe(true);
+    const opp = await database.select().from(schema.agentExperienceScores).where(and(eq(schema.agentExperienceScores.agentId, agent!.id), eq(schema.agentExperienceScores.domainSlug, 'programming')));
+    expect(opp[0]!.replayScore).not.toBeNull();
+    expect(opp[0]!.level).not.toBe('none');
+  });
+
   it('does nothing when switched off', async () => {
     cfg.HIVE_LIVE = false;
     const before = (await database.select({ n: sql<number>`count(*)::int` }).from(schema.debates))[0]!.n;

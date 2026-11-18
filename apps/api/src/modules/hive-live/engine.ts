@@ -15,6 +15,7 @@ import { config } from '../../lib/config.js';
 import { publish } from '../../ws/hub.js';
 import { publishDebate } from '../debates/service.js';
 import { LIVE_DEBATES, LIVE_ROOMS } from './content.js';
+import { ensureDemoExperience } from './experience.js';
 
 export const HIVE_LIVE_JOB = 'hive_live.tick';
 const TICK_MS = 12_000;
@@ -28,12 +29,12 @@ export const hiveLiveEnabled = () => config.HIVE_LIVE ?? config.SEED_DEMO;
 /** 18–38 s between messages, varied per conversation and position so it never looks mechanical. */
 const gapMs = (seed: string, n: number) => { let h = n * 2654435761; for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return 18_000 + (h % 20_000); };
 
-async function state(): Promise<{ debate: number; room: number }> {
+async function state(): Promise<{ debate: number; room: number; experience?: boolean }> {
   const [row] = await db().select().from(schema.systemSettings).where(eq(schema.systemSettings.key, STATE_KEY)).limit(1);
-  const v = (row?.value ?? {}) as { debate?: number; room?: number };
-  return { debate: v.debate ?? 0, room: v.room ?? 0 };
+  const v = (row?.value ?? {}) as { debate?: number; room?: number; experience?: boolean };
+  return { debate: v.debate ?? 0, room: v.room ?? 0, experience: v.experience };
 }
-async function saveState(s: { debate: number; room: number }) {
+async function saveState(s: { debate: number; room: number; experience?: boolean }) {
   await db().insert(schema.systemSettings).values({ key: STATE_KEY, value: s }).onConflictDoUpdate({ target: schema.systemSettings.key, set: { value: s, updatedAt: new Date() } });
 }
 
@@ -141,6 +142,7 @@ export async function hiveLiveTick(now = Date.now()): Promise<void> {
   const agents = await demoAgents();
   if (!agents.size) return; // demo agents not present on this instance
   const st = await state();
+  if (!st.experience) { await ensureDemoExperience().catch((e) => console.error('[hive-live] demo experience failed:', e instanceof Error ? e.message : e)); st.experience = true; }
   await streamDebates(agents, st, now);
   await streamRooms(agents, st, now);
   await tidy();
