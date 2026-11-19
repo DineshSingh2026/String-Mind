@@ -5,7 +5,7 @@
  */
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUpRight, Radio } from 'lucide-react';
+import { ArrowUpRight, Radio, Trophy } from 'lucide-react';
 import { Avatar, cn } from '@/components/ui';
 import { agentColor } from '@/components/brand/hex';
 import { useApi } from '@/lib/api';
@@ -17,6 +17,8 @@ interface DAgent { id: string; name: string; avatar: string | null }
 interface Deb { id: string; title: string; status: string; rounds?: number; agentA: DAgent | null; agentB: DAgent | null }
 interface DebMsg { id: string; agentId: string | null; role: string; content: string; round: number; createdAt: string }
 type Who = { id: string; name: string; avatar?: string | null };
+interface Scores { preScore: number | null; postScore: number | null; improvement: number | null }
+interface RoomDetail extends Room { demo?: boolean; endedAt?: string | null; scores?: Scores | null; liveScores?: Scores; settlement?: { feeIdle: number; terms: string | null; status: string | null; commissionIdle: number | null; trainerEarningsIdle: number | null; commissionRateBps: number | null } }
 
 const list = <T,>(d: unknown): T[] => (Array.isArray(d) ? d : ((d as { items?: T[] })?.items ?? []));
 const clean = (s: string) => s.replace(/^Live demo( room)?:\s*/i, '').replace(/^Demo( room| challenge)?:\s*/i, '');
@@ -102,10 +104,65 @@ function RoomProgress({ stage }: { stage: string }) {
   );
 }
 
+const n = (v: number | null | undefined) => (v == null ? '—' : String(Math.round(v * 10) / 10));
+
+/** The result of the most recent completed training — real scores and the real settlement from the ledger. */
+function ResultBoard({ id }: { id: string }) {
+  const q = useApi<RoomDetail>(`/social/rooms/${id}`, { refreshInterval: 30000 });
+  const r = q.data;
+  const sc = r?.scores ?? r?.liveScores;
+  if (!r || !sc || sc.postScore == null) return null;
+  const st = r.settlement;
+  const settled = st?.status === 'settled';
+  const up = (sc.improvement ?? 0) > 0;
+  return (
+    <Link href={`/app/rooms/${r.id}`} className="lux-panel lux-card group relative block overflow-hidden rounded-[28px] p-6 sm:p-7">
+      <div aria-hidden className="lux-sheen pointer-events-none absolute inset-0" />
+      <div className="relative grid gap-6 lg:grid-cols-[1.1fr_1.4fr_1fr] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--lux-gold)]"><Trophy className="h-3.5 w-3.5" />Latest training result</div>
+          <h3 className="mt-3 truncate font-lux text-2xl leading-tight text-fg">{clean(r.subject)}</h3>
+          <div className="mt-3 flex items-center gap-3">
+            {r.trainer && <Halo who={r.trainer} size={34} />}
+            <span className="text-xs text-fg-muted"><span className="text-fg">{r.trainer?.name}</span> trained <span className="text-fg">{r.learner?.name}</span></span>
+            {r.learner && <Halo who={r.learner} size={34} />}
+          </div>
+        </div>
+        <div>
+          <div className="flex items-end gap-4">
+            <div><div className="text-[9px] uppercase tracking-[0.25em] text-fg-subtle">Before</div><div className="font-lux text-5xl leading-none text-fg-muted tabular-nums">{n(sc.preScore)}</div></div>
+            <span aria-hidden className="mb-3 font-lux text-2xl text-[color:var(--lux-gold)]/70">→</span>
+            <div><div className="text-[9px] uppercase tracking-[0.25em] text-[color:var(--lux-gold)]">After</div><div className="font-lux text-5xl leading-none text-fg tabular-nums">{n(sc.postScore)}</div></div>
+            <span className={cn('mb-1 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums', up ? 'bg-emerald-400/15 text-emerald-300' : 'bg-white/5 text-fg-muted')}>{up ? '+' : ''}{n(sc.improvement)}</span>
+          </div>
+          <div className="mt-4 space-y-1.5" aria-hidden>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-white/30" style={{ width: `${Math.max(2, Math.min(100, sc.preScore ?? 0))}%` }} /></div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-[color:var(--lux-gold)]" style={{ width: `${Math.max(2, Math.min(100, sc.postScore ?? 0))}%` }} /></div>
+          </div>
+          <p className="mt-2 text-[11px] text-fg-subtle">Independent evaluator · the trainer&apos;s held-back real cases, before and after</p>
+        </div>
+        {st && (
+          <dl className="space-y-1.5 rounded-2xl border border-white/10 bg-black/20 p-4 text-xs">
+            <div className="flex justify-between gap-3"><dt className="text-fg-muted">Fee (escrow)</dt><dd className="tabular-nums text-fg">{st.feeIdle.toLocaleString()} IDLE</dd></div>
+            {settled ? <>
+              <div className="flex justify-between gap-3"><dt className="text-fg-muted">Trainer earned</dt><dd className="font-semibold tabular-nums text-[color:var(--lux-gold)]">{(st.trainerEarningsIdle ?? 0).toLocaleString()} IDLE</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-fg-muted">Platform commission</dt><dd className="tabular-nums text-fg">{(st.commissionIdle ?? 0).toLocaleString()} IDLE</dd></div>
+              <div className="pt-1 text-[10px] uppercase tracking-[0.2em] text-emerald-300">✓ Settled on the ledger</div>
+            </> : <div className="pt-1 text-[10px] uppercase tracking-[0.2em] text-fg-subtle">{st.status === 'refunded' ? 'No improvement · fee refunded' : `Settlement · ${st.status ?? 'pending'}`}</div>}
+          </dl>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 export function LiveTheatre() {
   const rooms = useApi<unknown>('/social/rooms?limit=12', { refreshInterval: 10000 });
   const allRooms = list<Room>(rooms.data);
   const room = allRooms.find((r) => r.live) ?? allRooms[0];
+  const lastDone = allRooms.find((r) => r.status === 'completed');
+  const roomDetail = useApi<RoomDetail>(room?.live ? `/social/rooms/${room.id}` : null, { refreshInterval: 10000 });
+  const pre = roomDetail.data?.liveScores?.preScore;
   const msgs = useApi<{ items: RoomMsg[] }>(room ? `/social/rooms/${room.id}/messages` : null, { refreshInterval: 4000 });
   const debs = useApi<unknown>('/debates/public', { refreshInterval: 10000 });
   const allDebs = list<Deb>(debs.data);
@@ -145,6 +202,7 @@ export function LiveTheatre() {
       <div className="grid gap-6 xl:grid-cols-2">
         {room && (
           <Stage kicker={`Training room · ${room.domain?.name ?? ''}`} title={clean(room.subject)} href={`/app/rooms/${room.id}`} live={room.live}
+            sub={room.live && roomDetail.data?.settlement ? `${roomDetail.data.settlement.feeIdle.toLocaleString()} IDLE in escrow${pre != null ? ` · pre-test ${n(pre)}/100` : ''} · pays only if the learner improves` : undefined}
             progress={<RoomProgress stage={room.stage} />}
             cast={<><Speaker a={room.trainer} label="Trainer" onAir={room.live && lastRoomSpeaker === 'trainer'} /><span aria-hidden className="lux-beam mx-2 h-px flex-1" /><Speaker a={room.learner} label="Learner" onAir={room.live && lastRoomSpeaker === 'learner'} /></>}>
             <AnimatePresence initial={false}>
@@ -163,6 +221,8 @@ export function LiveTheatre() {
           </Stage>
         )}
       </div>
+
+      {lastDone && <ResultBoard id={lastDone.id} />}
 
       {more.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

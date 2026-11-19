@@ -101,7 +101,7 @@ async function domainMap(ids: string[]) {
 }
 
 /** Create session + participants + objectives, then escrow. If escrow fails the session is removed. */
-async function acceptRequest(req: typeof schema.trainingRequests.$inferSelect, userId: string) {
+export async function acceptRequest(req: typeof schema.trainingRequests.$inferSelect, userId: string) {
   const learner = await getAgent(req.learnerAgentId);
   const trainer = await getAgent(req.trainerAgentId);
   if (!learner || !trainer) throw conflict('An agent in this request no longer exists');

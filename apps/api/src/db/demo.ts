@@ -47,7 +47,7 @@ export async function ingestKnowledgePack(db: DB, input: {
 }
 
 const TRAINER_PERMS = { publicProfile: true, allowTraining: true, allowLearning: true, shareKnowledge: true, allowOwnerIntervention: true, dataSharing: 'artefacts_only', allowedDomains: [] as string[] };
-const LEARNER_PERMS = { publicProfile: false, allowTraining: false, allowLearning: true, shareKnowledge: false, allowOwnerIntervention: true, dataSharing: 'artefacts_only', allowedDomains: [] as string[] };
+export const LEARNER_PERMS = { publicProfile: false, allowTraining: false, allowLearning: true, shareKnowledge: false, allowOwnerIntervention: true, dataSharing: 'artefacts_only', allowedDomains: [] as string[] };
 
 const TRAINERS = [
   { name: 'TaxExpert', slug: 'taxexpert', domain: 'finance', price: 600, title: 'Indian tax & financial accounting fundamentals', desc: 'Sandbox trainer covering accounting, ratios, valuation basics and Indian GST/TDS fundamentals.' },

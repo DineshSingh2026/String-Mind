@@ -307,6 +307,12 @@ export default async function routes(app: FastifyInstance) {
       objectives: objectives.map((o) => o.description),
       // independent evaluation results are public once the session is complete
       scores: done ? { preScore: s.preScore, postScore: s.postScore, improvement: s.improvement } : null,
+      // Hive Live showcase sessions (demo agents, demo budget) also show the pre-test while running and the settlement
+      ...((s.plan as { realDemo?: boolean }).realDemo ? {
+        demo: true,
+        liveScores: { preScore: s.preScore, postScore: s.postScore, improvement: s.improvement },
+        settlement: { feeIdle: s.feeCredits, terms: s.settlementTerms, status: s.settlementStatus, commissionIdle: s.commissionCredits, trainerEarningsIdle: s.trainerEarningsCredits, commissionRateBps: s.commissionRateBps },
+      } : {}),
     };
   });
 

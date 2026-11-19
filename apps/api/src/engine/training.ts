@@ -218,7 +218,13 @@ async function screen(session: Session, content: string, prompts: HeldOutPrompt[
 
 /* ───────────────────────────── agent calls ───────────────────────────── */
 
+/** Optional pacing per session (Hive Live showcase sessions unfold over minutes so visitors can watch each stage). */
+const sessionPace = new Map<string, number>();
+export function setSessionPace(sessionId: string, ms: number) { if (ms > 0) sessionPace.set(sessionId, ms); else sessionPace.delete(sessionId); }
+
 async function call(agentId: string, messages: ChatMessage[], system: string, opts: InvokeContextOptions) {
+  const pace = opts.sessionId ? sessionPace.get(opts.sessionId) : undefined;
+  if (pace) await new Promise((r) => setTimeout(r, pace));
   let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {

@@ -6,7 +6,7 @@
  */
 import Link from 'next/link';
 import { useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Eye, Lock, MessagesSquare, Target, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Lock, MessagesSquare, Target, TrendingUp } from 'lucide-react';
 import { useApi } from '@/lib/api';
 import { useRealtime } from '@/lib/realtime';
 import { Avatar, EmptyState, ErrorState, Skeleton, cn, fmtDateTime } from '@/components/ui';
@@ -113,6 +113,7 @@ export function PublicRoomView({ id, backHref, backLabel, profileBase }: { id: s
         </section>
 
         <aside className="space-y-4" aria-label="Room details">
+          {r.demo && <ShowcaseJourney r={r} />}
           <AgentPanel agent={r.trainer} role="Trainer" profileBase={profileBase} />
           <AgentPanel agent={r.learner} role="Learner" profileBase={profileBase} />
           {r.objectives.length > 0 && (
@@ -121,7 +122,7 @@ export function PublicRoomView({ id, backHref, backLabel, profileBase }: { id: s
               <ul className="space-y-1.5 text-sm text-fg-muted">{r.objectives.map((o, i) => <li key={i} className="flex gap-2"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-fg-subtle" />{o}</li>)}</ul>
             </div>
           )}
-          {r.scores && (
+          {r.scores && !r.demo && (
             <div className="card p-4">
               <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><TrendingUp className="h-4 w-4 text-fg-subtle" aria-hidden />Independent evaluation</p>
               <dl className="grid grid-cols-3 gap-2 text-center">
@@ -141,6 +142,98 @@ export function PublicRoomView({ id, backHref, backLabel, profileBase }: { id: s
       </div>
     </div>
   );
+}
+
+/** The whole training lifecycle for a Hive Live showcase session — every number comes from the session row. */
+const STEPS: { key: string; title: string; detail: string }[] = [
+  { key: 'escrow', title: 'Request & escrow', detail: "The learner org books the trainer's listing; the fee is locked in escrow." },
+  { key: 'introduction', title: 'Briefing & pre-test', detail: "An independent evaluator replays the trainer's held-back real cases on the learner." },
+  { key: 'knowledge_sharing', title: 'Mind transfer', detail: 'The trainer teaches from its own recorded cases; the learner keeps them as memory.' },
+  { key: 'practical_exercises', title: 'Practice', detail: 'The learner works through exercises using what it just learned.' },
+  { key: 'evaluation', title: 'Post-test', detail: 'The same held-back cases, graded again, with no hints from the trainer.' },
+  { key: 'completion', title: 'Settlement', detail: 'Escrow released: trainer earnings + platform commission, only if the learner improved.' },
+];
+
+function ShowcaseJourney({ r }: { r: RoomDetail }) {
+  const done = r.status === 'completed';
+  const at = STEPS.findIndex((s) => s.key === r.stage);
+  const idx = done ? STEPS.length : Math.max(1, at);
+  const sc = r.liveScores; const st = r.settlement;
+  const settled = st?.status === 'settled';
+  const refunded = !!st?.status && /refund|cancel|void/.test(st.status);
+  return (
+    <div className="lux-panel relative overflow-hidden rounded-2xl p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="font-lux text-lg italic"><span className="lux-title">The whole process</span></p>
+        <span className="rounded-full border border-[color:var(--lux-gold)]/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[color:var(--lux-gold)]">Live demo</span>
+      </div>
+      <ol className="space-y-2.5">
+        {STEPS.map((s, i) => {
+          const state = i < idx ? 'done' : i === idx ? 'now' : 'next';
+          return (
+            <li key={s.key} className="flex gap-2.5">
+              <span className={cn('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] tabular-nums',
+                state === 'done' && 'border-emerald-400/50 bg-emerald-400/15 text-emerald-300',
+                state === 'now' && 'lux-progress-now border-[color:var(--lux-gold)] text-[color:var(--lux-gold)]',
+                state === 'next' && 'border-white/15 text-fg-subtle')}>
+                {state === 'done' ? <Check className="h-3 w-3" aria-hidden /> : i + 1}
+              </span>
+              <div className="min-w-0">
+                <p className={cn('text-sm leading-tight', state === 'next' ? 'text-fg-subtle' : 'text-fg')}>{s.title}{state === 'now' && <span className="ml-1.5 text-[10px] uppercase tracking-wider text-[color:var(--lux-gold)]">now</span>}</p>
+                {state !== 'next' && <p className="mt-0.5 text-[11px] leading-snug text-fg-muted">{s.detail}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="lux-hair my-4" />
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-fg-subtle"><TrendingUp className="h-3.5 w-3.5" aria-hidden />Results</p>
+      <dl className="grid grid-cols-3 gap-2 text-center">
+        <Score label="Before" v={sc?.preScore ?? null} />
+        <Score label="After" v={sc?.postScore ?? null} />
+        <Score label="Change" v={sc?.improvement ?? null} signed />
+      </dl>
+      {sc?.preScore != null && (
+        <div className="mt-3 space-y-1.5" aria-hidden>
+          <Bar label="Before" v={sc.preScore} cls="bg-white/30" />
+          {sc.postScore != null && <Bar label="After" v={sc.postScore} cls="bg-gradient-to-r from-emerald-400 to-[color:var(--lux-gold)]" />}
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-fg-subtle">{sc?.postScore != null ? 'Measured on real cases the learner never saw during teaching.' : sc?.preScore != null ? 'Pre-test done. The post-test runs after teaching and practice.' : 'The pre-test score appears once the evaluator has run.'}</p>
+
+      {st && (
+        <>
+          <div className="lux-hair my-4" />
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg-subtle">Settlement</p>
+          <dl className="space-y-1.5 text-sm">
+            <Row k="Fee in escrow" v={`${st.feeIdle.toLocaleString()} IDLE`} />
+            <Row k="Terms" v={st.terms === 'on_improvement' ? 'Pay only if the learner improves' : st.terms === 'on_completion' ? 'Pay on completion' : (st.terms ?? '—')} />
+            {settled && <Row k="Trainer earned" v={`${(st.trainerEarningsIdle ?? 0).toLocaleString()} IDLE`} strong />}
+            {settled && <Row k={`Platform commission${st.commissionRateBps != null ? ` (${st.commissionRateBps / 100}%)` : ''}`} v={`${(st.commissionIdle ?? 0).toLocaleString()} IDLE`} />}
+          </dl>
+          <p className={cn('mt-2 rounded-lg px-2.5 py-1.5 text-[11px]', settled ? 'bg-emerald-400/10 text-emerald-300' : refunded ? 'bg-amber-400/10 text-amber-300' : 'bg-white/5 text-fg-muted')}>
+            {settled ? 'Settled on the Hive Mind ledger: escrow released.' : refunded ? 'The learner did not improve enough, so the fee went back to the learner.' : done ? `Settlement: ${st.status ?? 'pending'}` : 'Held in escrow until the post-test decides.'}
+          </p>
+        </>
+      )}
+      <p className="mt-3 text-[10px] leading-snug text-fg-subtle">Demo agents and a demo IDLE budget; the engine, scores and ledger entries are real.</p>
+    </div>
+  );
+}
+
+function Bar({ label, v, cls }: { label: string; v: number; cls: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[10px] text-fg-subtle">
+      <span className="w-10">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5"><div className={cn('h-full rounded-full transition-[width] duration-1000', cls)} style={{ width: `${Math.max(2, Math.min(100, v))}%` }} /></div>
+      <span className="w-7 text-right tabular-nums">{Math.round(v)}</span>
+    </div>
+  );
+}
+
+function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
+  return <div className="flex items-baseline justify-between gap-3"><dt className="text-fg-muted">{k}</dt><dd className={cn('tabular-nums', strong ? 'font-semibold text-[color:var(--lux-gold)]' : 'text-fg')}>{v}</dd></div>;
 }
 
 function Back({ href, label }: { href: string; label: string }) {
