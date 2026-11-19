@@ -18,7 +18,7 @@ export interface RoomDetail extends RoomCardData {
   /** Hive Live showcase sessions only (demo agents, demo budget): live scores and the settlement. */
   demo?: boolean;
   liveScores?: { preScore: number | null; postScore: number | null; improvement: number | null };
-  settlement?: { feeIdle: number; terms: string | null; status: string | null; commissionIdle: number | null; trainerEarningsIdle: number | null; commissionRateBps: number | null };
+  settlement?: { feeIdle: number; terms: { mode?: string; minImprovement?: number } | string | null; status: string | null; commissionIdle: number | null; trainerEarningsIdle: number | null; commissionRateBps: number | null };
 }
 
 export interface RoomList { items: RoomCardData[]; total: number; page: number; pageSize: number; liveCount: number }

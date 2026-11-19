@@ -104,6 +104,8 @@ export async function logMessage(input: {
   sessionId: string; senderRole: 'trainer' | 'learner' | 'system' | 'owner' | 'evaluator'; stage: string; content: string;
   senderAgentId?: string | null; senderUserId?: string | null; metadata?: Record<string, unknown>; flagged?: boolean; flagReason?: string | null;
 }) {
+  const pace = sessionPace.get(input.sessionId); // Hive Live showcase: one line at a time, so visitors can follow
+  if (pace) await new Promise((r) => setTimeout(r, pace));
   const [m] = await db().insert(schema.trainingMessages).values({
     sessionId: input.sessionId, senderRole: input.senderRole, stage: input.stage, content: input.content,
     senderAgentId: input.senderAgentId ?? null, senderUserId: input.senderUserId ?? null,
@@ -223,8 +225,6 @@ const sessionPace = new Map<string, number>();
 export function setSessionPace(sessionId: string, ms: number) { if (ms > 0) sessionPace.set(sessionId, ms); else sessionPace.delete(sessionId); }
 
 async function call(agentId: string, messages: ChatMessage[], system: string, opts: InvokeContextOptions) {
-  const pace = opts.sessionId ? sessionPace.get(opts.sessionId) : undefined;
-  if (pace) await new Promise((r) => setTimeout(r, pace));
   let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {

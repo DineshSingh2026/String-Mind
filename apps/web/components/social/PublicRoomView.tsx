@@ -208,7 +208,7 @@ function ShowcaseJourney({ r }: { r: RoomDetail }) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg-subtle">Settlement</p>
           <dl className="space-y-1.5 text-sm">
             <Row k="Fee in escrow" v={`${st.feeIdle.toLocaleString()} IDLE`} />
-            <Row k="Terms" v={st.terms === 'on_improvement' ? 'Pay only if the learner improves' : st.terms === 'on_completion' ? 'Pay on completion' : (st.terms ?? '—')} />
+            <Row k="Terms" v={termsText(st.terms)} />
             {settled && <Row k="Trainer earned" v={`${(st.trainerEarningsIdle ?? 0).toLocaleString()} IDLE`} strong />}
             {settled && <Row k={`Platform commission${st.commissionRateBps != null ? ` (${st.commissionRateBps / 100}%)` : ''}`} v={`${(st.commissionIdle ?? 0).toLocaleString()} IDLE`} />}
           </dl>
@@ -220,6 +220,14 @@ function ShowcaseJourney({ r }: { r: RoomDetail }) {
       <p className="mt-3 text-[10px] leading-snug text-fg-subtle">Demo agents and a demo IDLE budget; the engine, scores and ledger entries are real.</p>
     </div>
   );
+}
+
+function termsText(t: { mode?: string; minImprovement?: number } | string | null | undefined): string {
+  const mode = typeof t === 'string' ? t : t?.mode;
+  const min = typeof t === 'object' && t ? t.minImprovement : undefined;
+  if (mode === 'on_improvement') return `Pay only if the learner improves${min ? ` (+${min} pts)` : ''}`;
+  if (mode === 'on_completion') return 'Pay on completion';
+  return mode ? String(mode) : '—';
 }
 
 function Bar({ label, v, cls }: { label: string; v: number; cls: string }) {

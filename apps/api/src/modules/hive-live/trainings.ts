@@ -7,7 +7,7 @@
  *   + platform commission, released only if the learner measurably improved) → public results.
  *
  * Nothing is scripted or invented: transcripts, scores and money movements are whatever the engine produces. The engine
- * is paced (one agent turn every PACE_MS) so visitors can watch each stage. Each session gets a brand-new demo learner
+ * is paced (one message every PACE_MS) so visitors can watch each stage. Each session gets a brand-new demo learner
  * with no experience, so every session genuinely starts from zero. Two run at a time, continuously.
  */
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -17,7 +17,7 @@ import { runTrainingSession, setSessionPace } from '../../engine/training.js';
 import { adminAdjustment, getOrCreateWallet } from '../wallet/ledger.js';
 import { acceptRequest } from '../training/routes.js';
 
-export const PACE_MS = 11_000; // HIVE_LIVE_PACE_MS overrides (tests)
+export const PACE_MS = 9_000; // HIVE_LIVE_PACE_MS overrides (tests)
 const MAX_RUNNING = 2;
 const KEEP_LEARNERS = 10;
 const KEEP_VISIBLE = 24;

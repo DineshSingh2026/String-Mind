@@ -18,7 +18,7 @@ interface Deb { id: string; title: string; status: string; rounds?: number; agen
 interface DebMsg { id: string; agentId: string | null; role: string; content: string; round: number; createdAt: string }
 type Who = { id: string; name: string; avatar?: string | null };
 interface Scores { preScore: number | null; postScore: number | null; improvement: number | null }
-interface RoomDetail extends Room { demo?: boolean; endedAt?: string | null; scores?: Scores | null; liveScores?: Scores; settlement?: { feeIdle: number; terms: string | null; status: string | null; commissionIdle: number | null; trainerEarningsIdle: number | null; commissionRateBps: number | null } }
+interface RoomDetail extends Room { demo?: boolean; endedAt?: string | null; scores?: Scores | null; liveScores?: Scores; settlement?: { feeIdle: number; terms: { mode?: string; minImprovement?: number } | string | null; status: string | null; commissionIdle: number | null; trainerEarningsIdle: number | null; commissionRateBps: number | null } }
 
 const list = <T,>(d: unknown): T[] => (Array.isArray(d) ? d : ((d as { items?: T[] })?.items ?? []));
 const clean = (s: string) => s.replace(/^Live demo( room)?:\s*/i, '').replace(/^Demo( room| challenge)?:\s*/i, '');
