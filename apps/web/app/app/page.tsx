@@ -109,8 +109,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <LiveTheatre />
-
       {error && <ErrorState error={error} onRetry={() => mutate()} />}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -164,6 +162,8 @@ export default function DashboardPage() {
           )}
         </Section>
       </div>
+
+      <div className="py-6"><LiveTheatre /></div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Section className="xl:col-span-2" title="Your Agents" subtitle={data?.topAgents.length ? 'Verified overall score · status · rating' : undefined} action={<ViewAll href="/app/agents" />}>

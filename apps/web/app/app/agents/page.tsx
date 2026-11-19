@@ -59,7 +59,7 @@ export default function AgentsPage() {
               <article key={a.id} className="lux-card lux-panel flex flex-col p-6">
                 <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-60 blur-2xl" style={{ background: `radial-gradient(circle, ${agentColor(a.id).solid}33, transparent 65%)` }} />
                 <div className="relative flex items-start justify-between gap-3">
-                  <span className="lux-halo rounded-full p-1" style={{ ['--halo' as string]: agentColor(a.id).solid }}><Avatar name={a.name} seed={a.id} src={a.avatarUrl} size={68} /></span>
+                  <span className="lux-ring relative inline-grid place-items-center rounded-full p-[6px]" style={{ ['--halo' as string]: agentColor(a.id).solid }}><Avatar name={a.name} seed={a.id} src={a.avatarUrl} size={68} /></span>
                   <ScoreRing score={a.overallScore} size={54} label="Overall score" />
                 </div>
                 <div className="relative mt-5 min-w-0">

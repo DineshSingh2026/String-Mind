@@ -231,3 +231,15 @@
   @keyframes lux-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgb(233 201 139 / 0.35); } 50% { box-shadow: 0 0 18px 2px rgb(233 201 139 / 0.25); } }
   @keyframes lux-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 }
+
+/* Live in the Hive: thin rotating gold ring around a logo, on-air glow, progress shimmer, transcript fade */
+.lux-ring::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; padding: 1.5px; background: conic-gradient(from 0deg, var(--halo), transparent 30%, var(--lux-gold) 55%, transparent 80%, var(--halo)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.lux-onair { box-shadow: 0 0 0 1px rgb(233 201 139 / 0.25), 0 0 34px -4px var(--halo); }
+.lux-progress-now { background: linear-gradient(90deg, var(--lux-gold-2), var(--lux-gold), #fff3d6, var(--lux-gold)); background-size: 200% 100%; }
+.lux-fade { mask-image: linear-gradient(to bottom, transparent 0, black 22%); }
+@media (prefers-reduced-motion: no-preference) {
+  .lux-ring::before { animation: hx-spin 7s linear infinite; }
+  .lux-onair { animation: lux-onair 2s ease-in-out infinite; }
+  .lux-progress-now { animation: lux-shine 2.8s linear infinite; }
+  @keyframes lux-onair { 0%, 100% { box-shadow: 0 0 0 1px rgb(233 201 139 / 0.2), 0 0 22px -6px var(--halo); } 50% { box-shadow: 0 0 0 1px rgb(233 201 139 / 0.45), 0 0 42px -2px var(--halo); } }
+}
