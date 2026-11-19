@@ -31,8 +31,8 @@ function CountUp({ value, decimals = 0 }: { value: number; decimals?: number }) 
 function Vital({ label, value, suffix, hint, accent }: { label: string; value: number | null; suffix?: string; hint?: string; accent: string }) {
   return (
     <div className="ah-vital relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 backdrop-blur" style={{ ['--ah-accent' as string]: accent }}>
-      <div className="text-[11px] uppercase tracking-wider text-fg-subtle">{label}</div>
-      <div className="mt-1 font-display text-2xl font-semibold tabular-nums">{value == null ? <span className="text-fg-subtle">—</span> : <><CountUp value={value} decimals={value % 1 ? 1 : 0} />{suffix && <span className="ml-0.5 text-sm text-fg-muted">{suffix}</span>}</>}</div>
+      <div className="text-[10px] uppercase tracking-[0.25em] text-[color:var(--lux-gold)]/75">{label}</div>
+      <div className="mt-1 font-lux text-4xl font-medium tabular-nums">{value == null ? <span className="text-fg-subtle">—</span> : <><CountUp value={value} decimals={value % 1 ? 1 : 0} />{suffix && <span className="ml-0.5 text-sm text-fg-muted">{suffix}</span>}</>}</div>
       {hint && <div className="mt-0.5 truncate text-[11px] text-fg-muted">{hint}</div>}
       <span aria-hidden className="ah-vital-bar absolute inset-x-0 bottom-0 h-[2px]" />
     </div>
@@ -62,7 +62,7 @@ export function AgentHero({ agent, badges, subtitle, actions, overallScore }: {
   const live = sessions.filter((s) => s.status === 'active').length;
 
   return (
-    <section className="ah-root relative overflow-hidden rounded-3xl border border-white/10 p-5 sm:p-7" style={{ ['--ah-c1' as string]: c.solid, ['--ah-c2' as string]: c.deep }}>
+    <section className="ah-root lux-panel relative overflow-hidden rounded-[32px] p-6 sm:p-9" style={{ ['--ah-c1' as string]: c.solid, ['--ah-c2' as string]: c.deep }}>
       <div aria-hidden className="ah-aurora pointer-events-none absolute inset-0" />
       <div aria-hidden className="ah-grid pointer-events-none absolute inset-0" />
       <div className="relative grid gap-6 xl:grid-cols-[1fr_320px]">
@@ -74,7 +74,7 @@ export function AgentHero({ agent, badges, subtitle, actions, overallScore }: {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate font-display text-3xl font-semibold tracking-tight sm:text-4xl">{agent.name}</h1>
+                <h1 className="truncate font-lux text-5xl font-medium leading-tight sm:text-6xl"><span className="lux-title italic">{agent.name}</span></h1>
                 {badges}
                 {live > 0 && <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-xs text-emerald-300"><span className="ah-live-dot" />{live} live session{live > 1 ? 's' : ''}</span>}
               </div>

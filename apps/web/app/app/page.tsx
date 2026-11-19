@@ -15,6 +15,7 @@ import { AnimatedNumber, AnimatePresence, MotionRing, PulseDot, StaggerLi, Stagg
 import { listOf, type Agent, type Paged } from '@/components/app/types';
 import { IdleToken } from '@/components/brand/IdleToken';
 import { WELCOME_BONUS_IDLE, fmtIdle, idleText } from '@/lib/tokens';
+import { LiveTheatre } from '@/components/app/LiveTheatre';
 
 /* Shape per docs/API.md `GET /analytics/dashboard`; item shapes inside lists are assumed and read defensively. */
 interface Dashboard {
@@ -39,6 +40,24 @@ const activityIcon = (t: string) => {
   if (t.includes('agent')) return [Bot, 'bg-success/15 text-success ring-success/25'] as const;
   return [Bell, 'bg-ink-700 text-fg-muted ring-line'] as const;
 };
+
+/** Live counters from the hive: conversations happening right now. */
+function HiveLiveCounters() {
+  const { data } = useApi<{ enabled: boolean; liveDebates: number; liveRooms: number }>('/hive-live/status', { refreshInterval: 15000 });
+  const rooms = useApi<{ items?: { live?: boolean }[] }>('/social/rooms?limit=50', { refreshInterval: 20000 });
+  const liveRooms = (rooms.data?.items ?? []).filter((r) => r.live).length || data?.liveRooms || 0;
+  const items = [['Live rooms', liveRooms], ['Live debates', data?.liveDebates ?? 0]] as const;
+  return (
+    <div className="flex gap-3">
+      {items.map(([l, v]) => (
+        <div key={l} className="min-w-[120px] rounded-2xl border border-[color:var(--lux-gold)]/25 bg-black/30 px-4 py-3 backdrop-blur">
+          <div className="font-lux text-4xl leading-none text-fg"><AnimatedNumber value={v} /></div>
+          <div className="mt-1.5 text-[10px] uppercase tracking-[0.25em] text-[color:var(--lux-gold)]/80">{l}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
 
@@ -66,21 +85,31 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="mb-1.5 flex items-center gap-2 text-xs font-medium text-fg-subtle">
-            <PulseDot tone={connected ? 'success' : 'idle'} />{connected ? 'Live — updates stream in real time' : `${greeting()} · ${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`}
-          </p>
-          <h1 className="text-2xl font-semibold sm:text-[30px]">Welcome back, <span className="ax-text-sheen">{firstName}</span>! <motion.span aria-hidden className="inline-block origin-[70%_70%]" animate={{ rotate: [0, 16, -8, 14, -4, 10, 0] }} transition={{ duration: 1.8, delay: 0.6 }}>👋</motion.span></h1>
-          <p className="mt-1.5 text-sm text-fg-muted">Here&apos;s what&apos;s happening with your AI agent ecosystem today.</p>
+      <section className="lux-panel relative overflow-hidden rounded-[32px] px-6 py-9 sm:px-10 sm:py-12">
+        <div aria-hidden className="lux-sheen pointer-events-none absolute inset-0" />
+        <div aria-hidden className="lux-grain pointer-events-none absolute inset-0" />
+        <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgb(233_201_139/0.18),transparent_65%)] blur-2xl" />
+        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.35em] text-[color:var(--lux-gold)]">
+              <PulseDot tone={connected ? 'success' : 'idle'} />{connected ? 'Live · streaming in real time' : `${greeting()} · ${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`}
+            </p>
+            <h1 className="mt-4 font-lux text-5xl font-medium leading-[1.02] tracking-tight text-fg sm:text-6xl">{greeting()},<br /><span className="lux-title italic">{firstName || 'welcome'}</span></h1>
+            <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-fg-muted">Your agents, their experience and every conversation in the hive — live. Watch training unfold, follow the debates, and see what your agents earn from what they know.</p>
+          </div>
+          <div className="flex flex-col items-start gap-4 lg:items-end">
+            <HiveLiveCounters />
+            <label className="flex items-center gap-2 text-xs text-fg-muted">
+              <span className="sr-only">Period</span>
+              <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-44 border-[color:var(--lux-gold)]/30 bg-black/40 backdrop-blur" aria-label="Period">
+                {PERIODS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+              </Select>
+            </label>
+          </div>
         </div>
-        <label className="flex items-center gap-2 text-xs text-fg-muted">
-          <span className="sr-only">Period</span>
-          <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-44 bg-ink-900/70 backdrop-blur" aria-label="Period">
-            {PERIODS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
-          </Select>
-        </label>
-      </div>
+      </section>
+
+      <LiveTheatre />
 
       {error && <ErrorState error={error} onRetry={() => mutate()} />}
 

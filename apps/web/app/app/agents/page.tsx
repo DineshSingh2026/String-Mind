@@ -9,6 +9,7 @@ import { useSession } from '@/lib/session';
 import { GridSkeleton, StatusPill, reputationName, titleCase, useAction } from '@/components/app/primitives';
 import { listOf, reputationLevel, type Agent, type Paged } from '@/components/app/types';
 import { PromptStatusBadge, isPromptAgent } from '@/components/app/PromptConnect';
+import { agentColor } from '@/components/brand/hex';
 
 const AgentStatus = ({ a }: { a: Agent }) => (<>
   {isPromptAgent(a) && a.status !== 'suspended' ? <PromptStatusBadge agentId={a.id} /> : <StatusPill status={a.status} />}
@@ -37,7 +38,7 @@ export default function AgentsPage() {
 
   return (
     <div>
-      <PageHeader title="My Agents" description="Connect, test, assess and manage the AI agents in your organisation."
+      <PageHeader title={<span className="font-lux text-5xl font-medium"><span className="lux-title italic">Your agents</span></span>} description="Every agent, its living mark and its record — connect, test, assess and open its command deck."
         actions={<>
           <div className="flex rounded-xl border border-line p-0.5" role="group" aria-label="View mode">
             <button onClick={() => setView('grid')} aria-pressed={view === 'grid'} aria-label="Grid view" className={cn('rounded-lg p-1.5', view === 'grid' ? 'bg-ink-800 text-fg' : 'text-fg-muted')}><LayoutGrid className="h-4 w-4" /></button>
@@ -53,29 +54,30 @@ export default function AgentsPage() {
             description="Connect an agent from xAI Grok, OpenAI, Anthropic, Gemini, a custom REST endpoint, webhook, A2A or MCP server — or start with the Hive Mind sandbox agent. Then run an independent capability assessment."
             action={can('agents.create') ? <Button variant="primary" href="/app/agents/new" icon={<Plug className="h-4 w-4" />}>Connect your first agent</Button> : <p className="text-xs text-fg-subtle">Ask an organisation admin to connect an agent.</p>} />
         ) : view === 'grid' ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
             {agents.map((a) => (
-              <article key={a.id} className="card flex flex-col p-4">
-                <div className="flex items-start gap-3">
-                  <Avatar name={a.name} src={a.avatarUrl} size={48} />
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/app/agents/${a.id}`} className="block truncate font-display text-[15px] font-semibold hover:underline">{a.name}</Link>
-                    <p className="truncate text-xs text-fg-muted">{isPromptAgent(a) ? 'Connected via prompt' : `${a.provider?.name ?? '—'} · ${a.modelName ?? '—'}`}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2"><AgentStatus a={a} />{a.isPublic && <Badge tone="gold">Public</Badge>}</div>
-                  </div>
-                  <ScoreRing score={a.overallScore} size={50} label="Overall score" />
+              <article key={a.id} className="lux-card lux-panel flex flex-col p-6">
+                <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-60 blur-2xl" style={{ background: `radial-gradient(circle, ${agentColor(a.id).solid}33, transparent 65%)` }} />
+                <div className="relative flex items-start justify-between gap-3">
+                  <span className="lux-halo rounded-full p-1" style={{ ['--halo' as string]: agentColor(a.id).solid }}><Avatar name={a.name} seed={a.id} src={a.avatarUrl} size={68} /></span>
+                  <ScoreRing score={a.overallScore} size={54} label="Overall score" />
                 </div>
-                <div className="mt-3 space-y-1 text-xs text-fg-muted">
-                  {isPromptAgent(a) ? <p>Connection: Prompt · no API key stored</p> : <>
+                <div className="relative mt-5 min-w-0">
+                  <Link href={`/app/agents/${a.id}`} className="block truncate font-lux text-[28px] font-medium leading-tight text-fg hover:text-[color:var(--lux-gold)]">{a.name}</Link>
+                  <p className="mt-1 truncate text-[11px] uppercase tracking-[0.22em] text-[color:var(--lux-gold)]/70">{isPromptAgent(a) ? 'Connected via prompt' : `${a.provider?.name ?? '—'} · ${a.modelName ?? '—'}`}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2"><AgentStatus a={a} />{a.isPublic && <Badge tone="gold">Public</Badge>}</div>
+                </div>
+                <div className="lux-hair relative my-5" />
+                <div className="relative space-y-1.5 text-xs text-fg-muted">
+                  {isPromptAgent(a) ? <p>Prompt connection · no API key stored</p> : <>
                     <HealthDot health={a.health} />
-                    <p>Connection: {titleCase(a.connection?.method)} · {titleCase(a.connection?.status)}{a.connection?.credentialLast4 ? ` · ••••${a.connection.credentialLast4}` : ''}</p>
-                    <p>Last test: {fmtRelative(a.connection?.lastTestedAt)}</p>
+                    <p>Last test {fmtRelative(a.connection?.lastTestedAt)}</p>
                   </>}
-                  {reputationLevel(a.reputation) && <p>Reputation: {reputationName(reputationLevel(a.reputation))}</p>}
+                  {reputationLevel(a.reputation) && <p>Reputation · {reputationName(reputationLevel(a.reputation))}</p>}
                   {a.connection?.lastError && <p className="text-danger-soft">Last error: {a.connection.lastError}</p>}
                 </div>
-                <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                  <Button size="sm" variant="outline" href={`/app/agents/${a.id}`} className="flex-1">Open</Button>
+                <div className="relative mt-auto flex flex-wrap gap-2 pt-5">
+                  <Link href={`/app/agents/${a.id}`} className="lux-btn flex-1 rounded-full px-4 py-2 text-center text-xs font-medium">Open command deck</Link>
                   {can('agents.connect') && <Button size="sm" variant="ghost" loading={busy === `test-${a.id}`} onClick={() => test(a)} icon={<Activity className="h-3.5 w-3.5" />}>Test</Button>}
                   {can('assessments.run') && <Button size="sm" variant="ghost" loading={busy === `assess-${a.id}`} onClick={() => assess(a)} icon={<Gauge className="h-3.5 w-3.5" />}>Assess</Button>}
                 </div>
